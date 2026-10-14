@@ -1,0 +1,117 @@
+package distribution
+
+import (
+	"errors"
+	"math"
+)
+
+// EvaluateFit berechnet alle Gütemetriken für eine beliebige ContinuousDistribution.
+func EvaluateFit(dist ContinuousDistribution, data []float64) (FitMetrics, error) {
+	cleaned := CleanData(data)
+	n := len(cleaned)
+	if n == 0 {
+		return FitMetrics{}, ErrEmptyData
+	}
+
+	k := float64(len(dist.Params()))
+	nFloat := float64(n)
+
+	// Sortierte Kopie für empirische CDF (KS-Test / RMSE) erstellen
+	sortedData := SortedCopy(cleaned)
+
+	// 1. Log-Likelihood berechnen
+	ll := 0.0
+	for _, x := range sortedData {
+		logPdf := dist.LogPDF(x)
+		if math.IsInf(logPdf, -1) || math.IsNaN(logPdf) {
+			// Falls Datenpunkt außerhalb des Trägers liegt oder numerischer Fehler auftritt
+			return FitMetrics{LogLikelihood: math.Inf(-1)}, ErrFitFailed
+		}
+		ll += logPdf
+	}
+
+	// 2. Informationskriterien berechnen (AIC & BIC)
+	aic := 2.0*k - 2.0*ll
+	bic := k*math.Log(nFloat) - 2.0*ll
+
+	// 3. KS-Statistik (D) & RMSE berechnen
+	ksStat := 0.0
+	sumSquaredErrors := 0.0
+
+	for i, x := range sortedData {
+		modelCDF := dist.CDF(x)
+
+		// Empirische CDF (ECDF) Stufen: lower = (i)/N, upper = (i+1)/N
+		ecdfLower := float64(i) / nFloat
+		ecdfUpper := float64(i+1) / nFloat
+
+		// Maximum Distance für Kolmogorov-Smirnov Test
+		dLower := math.Abs(modelCDF - ecdfLower)
+		dUpper := math.Abs(modelCDF - ecdfUpper)
+
+		if dLower > ksStat {
+			ksStat = dLower
+		}
+		if dUpper > ksStat {
+			ksStat = dUpper
+		}
+
+		// RMSE-Berechnung gegen die kontinuierliche Plotting-Position (Hazens Formel: (i - 0.5) / N)
+		// Dies ist symmetrischer und robuster als der reine obere Sprungpunkt
+		ecdfMid := (float64(i) + 0.5) / nFloat
+		err := modelCDF - ecdfMid
+		sumSquaredErrors += err * err
+	}
+
+	rmse := math.Sqrt(sumSquaredErrors / nFloat)
+
+	return FitMetrics{
+		SampleSize:    n,
+		LogLikelihood: ll,
+		AIC:           aic,
+		BIC:           bic,
+		KSStatistic:   ksStat,
+		RMSE:          rmse,
+	}, nil
+}
+
+func SelectBestModel(data []float64) (ContinuousDistribution, FitMetrics, error) {
+	fitters := []Fitter{
+		WeibullFitter{},
+		LogNormalFitter{},
+		GammaFitter{},
+		NormalFitter{},
+		BetaFitter{},
+		ExponentialFitter{},
+		GumbelFitter{},
+	}
+
+	var bestDist ContinuousDistribution
+	var bestMetrics FitMetrics
+	bestAIC := math.Inf(1)
+
+	for _, fitter := range fitters {
+		dist, err := fitter.Fit(data)
+		if err != nil {
+			continue // Falls ein Fit konvergenzbedingt fehlschlägt
+		}
+
+		metrics, err := EvaluateFit(dist, data)
+		if err != nil {
+			continue
+		}
+
+		// Modell mit dem niedrigsten AIC wählen
+		if metrics.AIC < bestAIC {
+			bestAIC = metrics.AIC
+			bestDist = dist
+			bestMetrics = metrics
+		}
+	}
+
+	if bestDist == nil {
+		return nil, FitMetrics{}, errors.New("kein geeignetes Modell gefunden")
+	}
+
+	return bestDist, bestMetrics, nil
+}
