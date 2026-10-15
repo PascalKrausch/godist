@@ -2,6 +2,7 @@ package distribution
 
 import (
 	"errors"
+
 	"math"
 )
 
@@ -76,6 +77,28 @@ func EvaluateFit(dist ContinuousDistribution, data []float64) (FitMetrics, error
 }
 
 func SelectBestModel(data []float64) (ContinuousDistribution, FitMetrics, error) {
+	results, _, err := SelectAllModels(data)
+	if err != nil {
+		return nil, FitMetrics{}, err
+	}
+
+	if len(results) == 0 {
+		return nil, FitMetrics{}, errors.New("kein geeignetes Modell gefunden")
+	}
+
+	bestIdx := 0
+	bestAIC := results[0].Metrics.AIC
+	for i, result := range results {
+		if result.Metrics.AIC < bestAIC {
+			bestAIC = result.Metrics.AIC
+			bestIdx = i
+		}
+	}
+
+	return results[bestIdx].Dist, results[bestIdx].Metrics, nil
+}
+
+func SelectAllModels(data []float64) ([]FitResult, []FitFailure, error) {
 	fitters := []Fitter{
 		WeibullFitter{},
 		LogNormalFitter{},
@@ -86,32 +109,33 @@ func SelectBestModel(data []float64) (ContinuousDistribution, FitMetrics, error)
 		GumbelFitter{},
 	}
 
-	var bestDist ContinuousDistribution
-	var bestMetrics FitMetrics
-	bestAIC := math.Inf(1)
+	var results []FitResult
+	var failures []FitFailure
 
 	for _, fitter := range fitters {
 		dist, err := fitter.Fit(data)
 		if err != nil {
-			continue // Falls ein Fit konvergenzbedingt fehlschlägt
+			failures = append(failures, FitFailure{
+				Name:  fitter.Name(),
+				Error: err.Error(),
+			})
+			continue
 		}
 
 		metrics, err := EvaluateFit(dist, data)
 		if err != nil {
+			failures = append(failures, FitFailure{
+				Name:  fitter.Name(),
+				Error: err.Error(),
+			})
 			continue
 		}
 
-		// Modell mit dem niedrigsten AIC wählen
-		if metrics.AIC < bestAIC {
-			bestAIC = metrics.AIC
-			bestDist = dist
-			bestMetrics = metrics
-		}
+		results = append(results, FitResult{
+			Dist:    dist,
+			Metrics: metrics,
+		})
 	}
 
-	if bestDist == nil {
-		return nil, FitMetrics{}, errors.New("kein geeignetes Modell gefunden")
-	}
-
-	return bestDist, bestMetrics, nil
+	return results, failures, nil
 }

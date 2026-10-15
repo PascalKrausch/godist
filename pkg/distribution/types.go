@@ -32,6 +32,11 @@ type FitMetrics struct {
 	RMSE          float64
 }
 
+type FitFailure struct {
+	Name  string `json:"name"`
+	Error string `json:"error"`
+}
+
 // Fehlerdefinitionen
 var (
 	ErrEmptyData   = errors.New("daten-slice ist leer")
