@@ -17,6 +17,10 @@ func (g Gumbel) Params() []float64 {
 	return []float64{g.Mu, g.Beta}
 }
 
+func (g Gumbel) ParamNames() []string {
+	return []string{"mu", "beta"}
+}
+
 func (g Gumbel) PDF(x float64) float64 {
 	if g.Beta <= 0 {
 		return 0

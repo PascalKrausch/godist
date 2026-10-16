@@ -8,6 +8,8 @@ type ContinuousDistribution interface {
 	CDF(x float64) float64
 	LogPDF(x float64) float64
 	Params() []float64
+	// ParamNames liefert die Namen der Parameter in derselben Reihenfolge wie Params().
+	ParamNames() []string
 }
 
 // Fitter beschreibt eine Schnittstelle zur Parameterschätzung für Verteilungen.

@@ -4,6 +4,8 @@
 
 > **Projektstatus: noch nicht produktiv verwenden.**  
 > Vor einem produktiven Einsatz müssen insbesondere Parameterschätzung, numerische Stabilität, Gütemaße, Eingabevalidierung und Testabdeckung systematisch überprüft werden.
+>
+> **Aktueller Stand:** Die Testabdeckung ist deutlich ausgebaut und der CLI-Prototyp verarbeitet reale Datensätze (z. B. `winequality-red.csv`). Es gibt jedoch noch einen fehlschlagenden Test und die Behandlung von Nullwerten ist nicht robust genug. Details stehen unter [Bekannte Probleme](#bekannte-probleme-stand-aktueller-prototyp).
 
 ## Ziele
 
@@ -25,7 +27,6 @@
 - Lognormal
 - Weibull
 
-Die konkrete Unterstützung hängt davon ab, welche Fitter in der aktuellen Version registriert sind. Eine Verteilung sollte erst als unterstützt gelten, wenn nicht nur ihre Dichte, sondern auch Parameterschätzung, Parametergrenzen und Tests implementiert sind.
 
 ## Architektur
 
@@ -36,7 +37,7 @@ Die konkrete Unterstützung hängt davon ab, welche Fitter in der aktuellen Vers
 │       └── main.go           # CLI-Einstiegspunkt
 ├── internal/
 │   └── cli/
-│       └── report/           # Terminalbericht und Ausgabeformatierung
+│       └── report.go         # Terminal- und JSON-Bericht
 ├── pkg/
 │   └── distribution/
 │       ├── beta.go
@@ -49,7 +50,8 @@ Die konkrete Unterstützung hängt davon ab, welche Fitter in der aktuellen Vers
 │       ├── log_normal.go
 │       ├── types.go
 │       ├── weibull.go
-│       └── fitter_test/      # Tests für den Fitter
+│       ├── *_test.go         # Unit-, Regressions-, Robustheits- und Stabilitätstests
+│       
 ├── go.mod
 └── go.sum
 ```
@@ -65,6 +67,7 @@ type ContinuousDistribution interface {
     CDF(x float64) float64
     LogPDF(x float64) float64
     Params() []float64
+    ParamNames() []string
 }
 
 // Fitter schätzt die Parameter einer Verteilung aus Daten.
@@ -74,18 +77,44 @@ type Fitter interface {
 }
 ```
 
-`Params() []float64` ist als generische Schnittstelle praktisch, für nutzerfreundliche Berichte sind jedoch benannte Parameter nötig. Geplant ist daher, Parameter wie `shape`, `scale`, `location`, `rate`, `alpha` oder `beta` an der Verteilung beziehungsweise über Metadaten zugänglich zu machen, statt sie in CLI-Ausgaben nur als `p0`, `p1` usw. darzustellen.
+`Params() []float64` liefert die Werte, `ParamNames() []string` die zugehörigen Namen in gleicher Reihenfolge (z. B. `shape`, `scale`, `location` bei Weibull, `rate` bei Exponential). Die CLI nutzt diese Namen für die Ausgabe.
 
 ## Aktueller CLI-Prototyp
 
 Der bestehende Prototyp unterstützt bereits Dateieingabe, Modellvergleich und Textausgabe. In der getesteten Version sind außerdem die Auswahl aller Kandidaten über `-all` und die JSON-Ausgabe über `-format=json` vorhanden.
+
+Unterstützte Eingabeformate sind `.txt` (ein Wert pro Zeile), `.json` (Array von Zahlen) und `.csv` (Semikolon als Trennzeichen, Header in der ersten Zeile).
 
 Beispiele für die aktuelle flag-basierte Oberfläche:
 
 ```bash
 ./distfit -file=measurements.txt -all
 ./distfit -file=measurements.txt -all -format=json
+
+# Spalte nach Name auswählen
+./distfit -file=winequality-red.csv -column="alcohol" -all
+
+# Spalte nach Index auswählen (0-basiert)
+./distfit -file=winequality-red.csv -column=10 -all
+
+# Ohne Spaltenauswahl (altes Verhalten: alle Zellen aller Spalten)
+./distfit -file=winequality-red.csv
 ```
+
+Das Flag `-format=json` wird nur zusammen mit `-all` ausgewertet (siehe [Bekannte Probleme](#bekannte-probleme-stand-aktueller-prototyp)).
+
+## Bekannte Probleme (Stand: aktueller Prototyp)
+
+- **Nullwerte und Träger-Grenzen:** `CleanData` entfernt nur `NaN`, `±Inf` und negative Werte; `0.0` bleibt erhalten. Bei Verteilungen mit positivem Träger führt das zu zwei Fehlbildern:
+  - LogNormal und Gamma scheitern, weil `LogPDF(0) = -∞` ist.
+  - Weibull und Beta verschieben ihren Träger (Weibull `location ≈ 0`, Beta `min ≈ -0.01`), damit `0` gültig wird. Die Fits erhalten dadurch sehr niedrige AIC-Werte.
+  - Beispiel `winequality-red.csv`, Spalte `citric acid`: 132 von 1599 Zeilen sind `0`. Weibull erreicht AIC −2024.58, Normal AIC −690.45. Dieser Vergleich ist nicht belastbar.
+- **Vergleichbarkeit der Modelle:** Der Bericht zeigt nicht, wie viele Werte pro Modell tatsächlich verwendet wurden. Modelle mit unterschiedlichen Stichproben sind nach AIC nicht vergleichbar.
+- **Beta-Fit:** Auf `residual sugar` scheitert die Optimierung (`linesearch: failed to converge`). Der Test `TestFittersRecoverKnownParameters/Beta` ist deshalb aktuell rot. Der Fit schätzt zusätzlich `min` und `max`; die Zählung von `k` und die Vergleichbarkeit mit einer Beta-Verteilung auf `[0, 1]` sind offen.
+- **Debug-Ausgabe:** Beim Lesen von `.csv` schreibt `readData` Dateianfang, Header und erste Datenzeile auf `stdout`. Das macht die Ausgabe von `-format=json` unbrauchbar. Außerdem greift der Code auf `records[0]` und `records[1]` zu, bevor die Länge geprüft wird; sehr kurze CSV-Dateien können dadurch abstürzen.
+- **Stille Verwerfung:** Nicht parsebare Zellen werden in `.txt` und bei Spaltenauswahl ohne Meldung übersprungen. Die Anzahl verworfener Werte wird nur im Einzelmodus ausgegeben, nicht im `-all`-Bericht.
+- **Format im Einzelmodus:** Ohne `-all` wird `-format=json` ignoriert.
+- **Spaltenauswahl:** Ohne `-column` werden bei CSV alle numerischen Zellen aller Spalten zu einem Datensatz vermischt. Das widerspricht dem Ziel aus Abschnitt 4.
 
 Die endgültige CLI-Oberfläche soll mit Unterbefehlen leichter auffindbar und erweiterbar werden. Die folgenden Befehle sind das Zielinterface; sie sind nicht zwingend bereits in jedem Build verfügbar.
 
@@ -202,6 +231,7 @@ Mindestens folgende Fälle automatisiert testen:
 - leere Daten und zu wenige Beobachtungen,
 - konstante Daten beziehungsweise Varianz null,
 - `NaN`, positive und negative Unendlichkeit,
+- viele exakte `0.0`-Werte, zum Beispiel `citric acid` in `winequality-red.csv` (132 von 1599 Zeilen), inklusive ihrer Auswirkung auf Support-Grenzen, Log-Likelihood und die Vergleichbarkeit der AIC-Werte,
 - Werte außerhalb des Supports einer Verteilung,
 - sehr kleine und sehr große Werte beziehungsweise Skalen,
 - Parameter nahe erlaubten Grenzen,
@@ -270,13 +300,13 @@ Performanceoptimierungen sollen auf Benchmarks beruhen und erst nach der fachlic
 
 ```bash
 # Tests
- go test ./...
+go test ./...
 
 # Benchmarks inklusive Allokationszahlen
- go test -bench=. -benchmem ./...
+go test -bench=. -benchmem ./...
 
 # CLI bauen
- go build -o distfit ./cmd/distfit
+go build -o distfit ./cmd/distfit
 ```
 
 Benchmarks können je nach Maschine, Go-Version und Datensatz unterschiedlich ausfallen. Ergebnisse sollten deshalb auf derselben Umgebung und mit vergleichbaren Eingaben gegenübergestellt werden.

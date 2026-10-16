@@ -16,6 +16,10 @@ func (e Exponential) Params() []float64 {
 	return []float64{e.Lambda}
 }
 
+func (e Exponential) ParamNames() []string {
+	return []string{"rate"}
+}
+
 func (e Exponential) PDF(x float64) float64 {
 	if x < 0 || e.Lambda <= 0 {
 		return 0

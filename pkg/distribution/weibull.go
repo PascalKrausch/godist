@@ -18,6 +18,10 @@ func (w Weibull) Params() []float64 {
 	return []float64{w.Shape, w.Scale, w.Location}
 }
 
+func (w Weibull) ParamNames() []string {
+	return []string{"shape", "scale", "location"}
+}
+
 func (w Weibull) Valid() bool {
 	return IsFinite(w.Shape) && IsFinite(w.Scale) && IsFinite(w.Location) && w.Shape > 0 && w.Scale > 0
 }

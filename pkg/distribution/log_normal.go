@@ -17,6 +17,10 @@ func (l LogNormal) Params() []float64 {
 	return []float64{l.Mu, l.Sigma}
 }
 
+func (l LogNormal) ParamNames() []string {
+	return []string{"mu", "sigma"}
+}
+
 func (l LogNormal) PDF(x float64) float64 {
 	if x <= 0 || l.Sigma <= 0 {
 		return 0

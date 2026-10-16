@@ -17,6 +17,11 @@ func (g Gamma) Params() []float64 {
 	return []float64{g.Alpha, g.Beta}
 }
 
+// ParamNames: Der zweite Parameter ist der Skalenparameter θ (Feldname Beta).
+func (g Gamma) ParamNames() []string {
+	return []string{"alpha", "scale"}
+}
+
 func (g Gamma) PDF(x float64) float64 {
 	if x <= 0 || g.Alpha <= 0 || g.Beta <= 0 {
 		return 0

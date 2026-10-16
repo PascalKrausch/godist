@@ -36,9 +36,10 @@ type FitReport struct {
 // Öffentliche Berichtsfunktionen
 
 // BuildFitReport erstellt einen Bericht aus erfolgreichen Fits und Fehlern.
-func BuildFitReport(results []distribution.FitResult, failures []distribution.FitFailure, input string, sampleSize int) FitReport {
+func BuildFitReport(results []distribution.FitResult, failures []distribution.FitFailure, input string, column string, sampleSize int) FitReport {
 	report := FitReport{
 		Input:      input,
+		Column:     column,
 		SampleSize: sampleSize,
 		Models:     make([]FitRow, 0, len(results)),
 		Failures:   failures,
@@ -47,7 +48,7 @@ func BuildFitReport(results []distribution.FitResult, failures []distribution.Fi
 	for _, result := range results {
 		report.Models = append(report.Models, FitRow{
 			Name:        getDistributionName(result.Dist),
-			Params:      paramsToMap(result.Dist.Params()),
+			Params:      paramsToMap(result.Dist),
 			AIC:         result.Metrics.AIC,
 			BIC:         result.Metrics.BIC,
 			KSStatistic: result.Metrics.KSStatistic,
@@ -273,11 +274,13 @@ func getDistributionName(dist distribution.ContinuousDistribution) string {
 	}
 }
 
-// paramsToMap ordnet Verteilungsparameter den Schlüsseln p0, p1 usw. zu.
-func paramsToMap(params []float64) map[string]float64 {
-	m := make(map[string]float64)
-	for i, p := range params {
-		m[fmt.Sprintf("p%d", i)] = p
+// paramsToMap ordnet Verteilungsparameter ihren benannten Schlüsseln zu.
+func paramsToMap(dist distribution.ContinuousDistribution) map[string]float64 {
+	values := dist.Params()
+	names := dist.ParamNames()
+	m := make(map[string]float64, len(values))
+	for i, p := range values {
+		m[names[i]] = p
 	}
 	return m
 }

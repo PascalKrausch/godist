@@ -17,6 +17,10 @@ func (n Normal) Params() []float64 {
 	return []float64{n.Mu, n.Sigma}
 }
 
+func (n Normal) ParamNames() []string {
+	return []string{"mu", "sigma"}
+}
+
 func (n Normal) PDF(x float64) float64 {
 	if n.Sigma <= 0 {
 		return 0
