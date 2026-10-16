@@ -21,6 +21,11 @@ func (b Beta) Params() []float64 {
 	return []float64{b.Alpha, b.Beta, b.Min, b.Max}
 }
 
+// freeParamCount: Min und Max sind fest (vorgegeben oder aus den Daten bestimmt) und werden nicht geschätzt.
+func (b Beta) freeParamCount() int {
+	return 2
+}
+
 func (b Beta) Valid() bool {
 	return b.Alpha > 0 && b.Beta > 0 && b.Max > b.Min && IsFinite(b.Alpha) && IsFinite(b.Beta)
 }

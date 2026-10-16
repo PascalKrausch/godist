@@ -8,18 +8,20 @@ import (
 func TestFittersFitValidData(t *testing.T) {
 	data := []float64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
 	withInvalidValues := []float64{1, 2, math.NaN(), 3, math.Inf(1), 4, -1, 5, 6, 7, 8, 9, 10}
+	withNonFiniteOnly := []float64{1, 2, math.NaN(), 3, math.Inf(1), 4, 5, 6, 7, 8, 9, 10}
 	tests := []struct {
-		name       string
-		fitter     Fitter
-		paramCount int
+		name          string
+		fitter        Fitter
+		paramCount    int
+		negativeValid bool
 	}{
-		{"Beta", BetaFitter{}, 4},
-		{"Exponential", ExponentialFitter{}, 1},
-		{"Normal", NormalFitter{}, 2},
-		{"Gumbel", GumbelFitter{}, 2},
-		{"Gamma", GammaFitter{}, 2},
-		{"LogNormal", LogNormalFitter{}, 2},
-		{"Weibull", WeibullFitter{}, 3},
+		{"Beta", BetaFitter{}, 4, false},
+		{"Exponential", ExponentialFitter{}, 1, false},
+		{"Normal", NormalFitter{}, 2, true},
+		{"Gumbel", GumbelFitter{}, 2, true},
+		{"Gamma", GammaFitter{}, 2, false},
+		{"LogNormal", LogNormalFitter{}, 2, false},
+		{"Weibull", WeibullFitter{}, 3, false},
 	}
 
 	for _, tt := range tests {
@@ -45,12 +47,19 @@ func TestFittersFitValidData(t *testing.T) {
 				t.Errorf("EvaluateFit() returned invalid metrics: %+v", metrics)
 			}
 
-			filteredDist, err := tt.fitter.Fit(withInvalidValues)
+			cleanedInput := withInvalidValues
+			if tt.negativeValid {
+				cleanedInput = withNonFiniteOnly
+			}
+			filteredDist, err := tt.fitter.Fit(cleanedInput)
 			if err != nil {
 				t.Fatalf("%s.Fit() with values removed by CleanData returned error: %v", tt.name, err)
 			}
 			for i, want := range dist.Params() {
-				assertNear(t, "parameter after cleaning", filteredDist.Params()[i], want)
+				got := filteredDist.Params()[i]
+				if math.IsNaN(got) || math.Abs(got-want) > 1e-12*(1+math.Abs(want)) {
+					t.Errorf("parameter after cleaning[%d] = %.16g, want %.16g", i, got, want)
+				}
 			}
 		})
 	}
@@ -94,5 +103,8 @@ func TestExponentialFitterRate(t *testing.T) {
 	if !ok {
 		t.Fatalf("Fit() returned %T, want Exponential", dist)
 	}
-	assertNear(t, "rate", got.Lambda, 0.4)
+	want := 0.4
+	if math.IsNaN(got.Lambda) || math.Abs(got.Lambda-want) > 1e-12*(1+math.Abs(want)) {
+		t.Errorf("rate = %.16g, want %.16g", got.Lambda, want)
+	}
 }

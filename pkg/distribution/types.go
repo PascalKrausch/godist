@@ -25,11 +25,13 @@ type FitResult struct {
 // FitMetrics enthält verschiedene Metriken zur Bewertung der Güte eines Fits.
 type FitMetrics struct {
 	SampleSize    int // Anzahl der verarbeiteten Datenpunkte
+	Discarded     int // Anzahl der ausgeschlossenen Eingabewerte (ungültig bzw. außerhalb des Trägers)
 	LogLikelihood float64
 	AIC           float64
 	BIC           float64
 	KSStatistic   float64
 	RMSE          float64
+	Converged     bool // true wenn die Optimierung konvergiert ist
 }
 
 type FitFailure struct {

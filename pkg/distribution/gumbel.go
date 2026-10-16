@@ -48,8 +48,13 @@ func (f GumbelFitter) Name() string {
 	return "Gumbel"
 }
 
+// unboundedSupport: Gumbel-Verteilung hat Träger ℝ, negative Werte sind gültig.
+func (g Gumbel) unboundedSupport() bool {
+	return true
+}
+
 func (f GumbelFitter) Fit(data []float64) (ContinuousDistribution, error) {
-	cleaned := CleanData(data)
+	cleaned := CleanDataWithZero(data)
 	n := len(cleaned)
 	if n < 2 {
 		return nil, errors.New("zu wenige gültige Datenpunkte für Gumbel-Verteilung")
@@ -102,9 +107,9 @@ func (f GumbelFitter) Fit(data []float64) (ContinuousDistribution, error) {
 		}
 	}
 
-	// Fallback auf Momentenschätzer, falls Newton fehlschlägt oder numerisch instabil wird
+	// Ohne Konvergenz ist kein MLE vorhanden: Fehler statt Momentenschätzer als Ergebnis ausgeben.
 	if !converged || beta <= 0 || !IsFinite(beta) {
-		beta = initBeta
+		return nil, ErrFitFailed
 	}
 
 	// 3. Nachdem Beta bestimmt ist, lässt sich Mu direkt analytisch berechnen:

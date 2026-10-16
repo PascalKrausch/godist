@@ -100,12 +100,7 @@ func (f WeibullFitter) Fit(data []float64) (ContinuousDistribution, error) {
 
 	summary := Summarize(cleaned)
 	if summary.Min == summary.Max {
-		loc := summary.Min - 1e-6
-		return Weibull{
-			Shape:    1,
-			Scale:    math.Max(summary.Min-loc, 1e-6),
-			Location: loc,
-		}, nil
+		return nil, errors.New("konstante Daten: Weibull-Parameter sind nicht identifizierbar")
 	}
 
 	searchWidth := math.Max(3*summary.StdDev, math.Max(0.1*(summary.Max-summary.Min), 1.0))

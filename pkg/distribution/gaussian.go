@@ -46,8 +46,13 @@ func (f NormalFitter) Name() string {
 	return "Normal"
 }
 
+// unboundedSupport: Normalverteilung hat Träger ℝ, negative Werte sind gültig.
+func (n Normal) unboundedSupport() bool {
+	return true
+}
+
 func (f NormalFitter) Fit(data []float64) (ContinuousDistribution, error) {
-	cleaned := CleanData(data)
+	cleaned := CleanDataWithZero(data)
 	if len(cleaned) < 2 {
 		return nil, errors.New("zu wenige gültige Datenpunkte für Normalverteilung")
 	}

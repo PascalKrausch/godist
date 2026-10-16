@@ -8,13 +8,13 @@ import (
 
 // EvaluateFit berechnet alle Gütemetriken für eine beliebige ContinuousDistribution.
 func EvaluateFit(dist ContinuousDistribution, data []float64) (FitMetrics, error) {
-	cleaned := CleanData(data)
+	cleaned := sampleFor(dist, data)
 	n := len(cleaned)
 	if n == 0 {
-		return FitMetrics{}, ErrEmptyData
+		return FitMetrics{Converged: false}, ErrEmptyData
 	}
 
-	k := float64(len(dist.Params()))
+	k := float64(freeParamCount(dist))
 	nFloat := float64(n)
 
 	// Sortierte Kopie für empirische CDF (KS-Test / RMSE) erstellen
@@ -26,7 +26,7 @@ func EvaluateFit(dist ContinuousDistribution, data []float64) (FitMetrics, error
 		logPdf := dist.LogPDF(x)
 		if math.IsInf(logPdf, -1) || math.IsNaN(logPdf) {
 			// Falls Datenpunkt außerhalb des Trägers liegt oder numerischer Fehler auftritt
-			return FitMetrics{LogLikelihood: math.Inf(-1)}, ErrFitFailed
+			return FitMetrics{LogLikelihood: math.Inf(-1), Converged: false}, ErrFitFailed
 		}
 		ll += logPdf
 	}
@@ -68,12 +68,41 @@ func EvaluateFit(dist ContinuousDistribution, data []float64) (FitMetrics, error
 
 	return FitMetrics{
 		SampleSize:    n,
+		Discarded:     len(data) - n,
 		LogLikelihood: ll,
 		AIC:           aic,
 		BIC:           bic,
 		KSStatistic:   ksStat,
 		RMSE:          rmse,
+		Converged:     true,
 	}, nil
+}
+
+// unboundedSupport markiert Verteilungen mit Träger ℝ, für die negative Werte gültig sind.
+type unboundedSupport interface {
+	unboundedSupport() bool
+}
+
+// freeParamCounter liefert die Anzahl der tatsächlich geschätzten Parameter (k für AIC/BIC),
+// falls diese von Params() abweicht.
+type freeParamCounter interface {
+	freeParamCount() int
+}
+
+// sampleFor bereinigt die Daten entsprechend dem Träger der Verteilung, damit Fit und Bewertung
+// dieselbe Stichprobe verwenden.
+func sampleFor(dist ContinuousDistribution, data []float64) []float64 {
+	if _, ok := dist.(unboundedSupport); ok {
+		return CleanDataWithZero(data)
+	}
+	return CleanData(data)
+}
+
+func freeParamCount(dist ContinuousDistribution) int {
+	if c, ok := dist.(freeParamCounter); ok {
+		return c.freeParamCount()
+	}
+	return len(dist.Params())
 }
 
 func SelectBestModel(data []float64) (ContinuousDistribution, FitMetrics, error) {

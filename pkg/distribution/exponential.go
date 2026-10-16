@@ -50,13 +50,6 @@ func (f ExponentialFitter) Fit(data []float64) (ContinuousDistribution, error) {
 		return nil, errors.New("zu wenige gültige Datenpunkte für Exponentialverteilung")
 	}
 
-	// Die Exponentialverteilung ist nur für nicht-negative Werte definiert
-	for _, x := range cleaned {
-		if x < 0 {
-			return nil, errors.New("Exponentialverteilung erfordert ausschließlich nicht-negative Werte")
-		}
-	}
-
 	mu := stat.Mean(cleaned, nil)
 	if mu <= 0 || !IsFinite(mu) {
 		return nil, errors.New("Mittelwert der Daten ist 0 oder ungültig (λ kann nicht bestimmt werden)")

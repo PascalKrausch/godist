@@ -54,7 +54,7 @@ func main() {
 			log.Fatalf("Fitting fehlgeschlagen: %v", err)
 		}
 		fmt.Println("=== GODIST FITTER ERGEBNIS ===")
-		fmt.Printf("Datenpunkte:    %d\n", metrics.SampleSize)
+		fmt.Printf("Datenpunkte:    %d (verworfen: %d)\n", metrics.SampleSize, metrics.Discarded)
 		fmt.Printf("Beste Kurve:    %T\n", bestDist)
 		fmt.Printf("Parameter:      %v\n", bestDist.Params())
 		fmt.Printf("AIC / BIC:      %.2f / %.2f\n", metrics.AIC, metrics.BIC)
