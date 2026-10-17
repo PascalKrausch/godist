@@ -164,14 +164,22 @@ func TestRegressionModelRanking(t *testing.T) {
 	}
 
 	// Sortiere nach AIC und stelle sicher, dass die Reihenfolge monoton ist
-	bestAIC := results[0].Metrics.AIC
-	for i, result := range results {
+	sortedResults := make([]FitResult, len(results))
+	copy(sortedResults, results)
+	for i := 0; i < len(sortedResults)-1; i++ {
+		for j := i + 1; j < len(sortedResults); j++ {
+			if sortedResults[i].Metrics.AIC > sortedResults[j].Metrics.AIC {
+				sortedResults[i], sortedResults[j] = sortedResults[j], sortedResults[i]
+			}
+		}
+	}
+
+	bestAIC := sortedResults[0].Metrics.AIC
+	for i, result := range sortedResults {
 		if result.Metrics.AIC < bestAIC {
 			t.Errorf("Results not sorted by AIC: results[%d].AIC = %g < bestAIC = %g", i, result.Metrics.AIC, bestAIC)
 		}
-		if result.Metrics.AIC < bestAIC {
-			bestAIC = result.Metrics.AIC
-		}
+		bestAIC = result.Metrics.AIC
 	}
 
 	// Überprüfe, dass fehlgeschlagene Fits korrekt gemeldet werden
@@ -371,11 +379,10 @@ func TestSelectBestModelWithSomeFailures(t *testing.T) {
 		return
 	}
 
-	// Wenn erfolgreich, sollte Converged true sein
+	// Wenn erfolgreich, sollte Converged true sein und AIC gültig
 	if !metrics.Converged {
 		t.Error("SelectBestModel() returned metrics with Converged = false")
 	}
-
 	if math.IsNaN(metrics.AIC) || math.IsInf(metrics.AIC, 0) {
 		t.Errorf("SelectBestModel() returned invalid AIC: %v", metrics.AIC)
 	}

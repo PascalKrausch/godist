@@ -21,7 +21,7 @@ func TestFittersFitValidData(t *testing.T) {
 		{"Gumbel", GumbelFitter{}, 2, true},
 		{"Gamma", GammaFitter{}, 2, false},
 		{"LogNormal", LogNormalFitter{}, 2, false},
-		{"Weibull", WeibullFitter{}, 3, false},
+		{"Weibull", WeibullFitter{}, 2, false},
 	}
 
 	for _, tt := range tests {
@@ -77,7 +77,7 @@ func TestFittersRejectInsufficientOrInvalidData(t *testing.T) {
 		{"Gumbel needs at least two observations", GumbelFitter{}, []float64{1}},
 		{"Gamma needs varying observations", GammaFitter{}, []float64{1}},
 		{"LogNormal needs varying observations", LogNormalFitter{}, []float64{1}},
-		{"Weibull needs at least three observations", WeibullFitter{}, []float64{1, 2}},
+		{"Weibull needs at least two observations", WeibullFitter{}, []float64{1}},
 		{"Beta rejects values on specified boundaries", BetaFitter{Min: 0, Max: 1}, []float64{0, 0.3, 0.8}},
 	}
 

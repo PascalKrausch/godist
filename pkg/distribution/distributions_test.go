@@ -89,8 +89,7 @@ func TestDistributionSupportBoundaries(t *testing.T) {
 		{"Exponential below zero", Exponential{Lambda: 2}, -0.1, 0},
 		{"Gamma at zero", Gamma{Alpha: 2, Beta: 3}, 0, 0},
 		{"LogNormal at zero", LogNormal{Mu: 0, Sigma: 1}, 0, 0},
-		{"Weibull below location", Weibull{Shape: 2, Scale: 3, Location: 1}, 0.9, 0},
-		{"Weibull at location", Weibull{Shape: 2, Scale: 3, Location: 1}, 1, 0},
+		{"Weibull at zero", Weibull{Shape: 2, Scale: 3}, 0, 0},
 	}
 
 	for _, tt := range tests {
@@ -120,7 +119,7 @@ func TestDistributionCDFProperties(t *testing.T) {
 		{"Gumbel", Gumbel{Mu: 1, Beta: 2}, []float64{-5, -1, 1, 3, 7}},
 		{"Gamma", Gamma{Alpha: 2, Beta: 3}, []float64{-1, 0, 0.25, 1, 3, 10}},
 		{"LogNormal", LogNormal{Mu: 0, Sigma: 1}, []float64{-1, 0, 0.25, 1, 3, 10}},
-		{"Weibull", Weibull{Shape: 2, Scale: 3, Location: 1}, []float64{-1, 0, 1, 2, 4, 10}},
+		{"Weibull", Weibull{Shape: 2, Scale: 3}, []float64{-1, 0, 0.25, 1, 3, 10}},
 	}
 
 	for _, tt := range tests {

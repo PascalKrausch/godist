@@ -240,7 +240,7 @@ func TestPDFIntegratesToCDFDifference(t *testing.T) {
 		{"Exponential", Exponential{Lambda: 0.7}, 0.1, 4},
 		{"LogNormal", LogNormal{Mu: 0.2, Sigma: 0.5}, 0.2, 3},
 		{"Gamma", Gamma{Alpha: 2.5, Beta: 1.5}, 0.1, 9},
-		{"Weibull", Weibull{Shape: 1.8, Scale: 2, Location: 0}, 0.05, 5},
+		{"Weibull", Weibull{Shape: 1.8, Scale: 2}, 0.05, 5},
 		{"Gumbel", Gumbel{Mu: 1, Beta: 2}, -4, 8},
 	}
 
@@ -276,7 +276,7 @@ func TestLogPDFMatchesLogOfPDF(t *testing.T) {
 		Exponential{Lambda: 1.3},
 		LogNormal{Mu: 0.1, Sigma: 0.6},
 		Gamma{Alpha: 3, Beta: 2},
-		Weibull{Shape: 2, Scale: 4, Location: 0},
+		Weibull{Shape: 2, Scale: 4},
 		Gumbel{Mu: 0, Beta: 1.5},
 	}
 	points := []float64{0.1, 0.5, 1, 2, 3.5, 7}
