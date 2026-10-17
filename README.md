@@ -5,7 +5,7 @@
 > **Projektstatus: noch nicht produktiv verwenden.**  
 > Vor einem produktiven Einsatz müssen insbesondere Parameterschätzung, numerische Stabilität, Gütemaße, Eingabevalidierung und Testabdeckung systematisch überprüft werden.
 >
-> **Aktueller Stand:** Die Testabdeckung ist deutlich ausgebaut und der CLI-Prototyp verarbeitet reale Datensätze (z. B. `winequality-red.csv`). Es gibt jedoch noch einen fehlschlagenden Test und die Behandlung von Nullwerten ist nicht robust genug. Details stehen unter [Bekannte Probleme](#bekannte-probleme-stand-aktueller-prototyp).
+> **Aktueller Stand:** Neun Verteilungen sind implementiert. Die Unit-, Regressions- und Stabilitätstests in `pkg/distribution` laufen grün (`go test ./...`); `cmd/distfit` und `internal/cli` haben noch keine automatisierten Tests. Der CLI-Prototyp verarbeitet reale Datensätze (z. B. `winequality-red.csv`). Die Behandlung von Nullwerten folgt einer strikten Fast-Fail-Policy (siehe [Nullwerte](#nullwerte-fast-fail-policy)). Offene Punkte stehen unter [Bekannte Probleme](#bekannte-probleme-stand-aktueller-prototyp).
 
 ## Ziele
 
@@ -19,13 +19,19 @@
 
 ## Aktuell unterstützte Verteilungen
 
-- Beta
-- Exponential
-- Gauß / Normal
-- Gumbel
-- Gamma
-- Lognormal
-- Weibull
+| Verteilung | Parameter | Träger |
+|---|---|---|
+| Beta | `alpha`, `beta`, `min`, `max` | [min, max] |
+| Exponential | `rate` | [0, ∞) |
+| Gauß / Normal | `mu`, `sigma` | ℝ |
+| Gumbel | `mu`, `beta` | ℝ |
+| Gamma | `alpha`, `scale` | [0, ∞) |
+| Lognormal | `mu`, `sigma` | (0, ∞) |
+| Weibull | `shape`, `scale` | [0, ∞) |
+| Laplace | `mu`, `scale` | ℝ |
+| Rayleigh | `scale` | [0, ∞) |
+
+Weibull ist eine Zweiparameter-Verteilung. Beim Beta-Fit werden nur `alpha` und `beta` geschätzt; `min` und `max` werden aus den Daten übernommen (siehe [Bekannte Probleme](#bekannte-probleme-stand-aktueller-prototyp)).
 
 
 ## Architektur
@@ -35,6 +41,8 @@
 ├── cmd/
 │   └── distfit/
 │       └── main.go           # CLI-Einstiegspunkt
+├── evaluation/
+│   └── compare.py            # Vergleich der Fits mit SciPy
 ├── internal/
 │   └── cli/
 │       └── report.go         # Terminal- und JSON-Bericht
@@ -42,16 +50,22 @@
 │   └── distribution/
 │       ├── beta.go
 │       ├── data_cleaning.go
+│       ├── distributions_test.go
 │       ├── exponential.go
 │       ├── fitter.go
+│       ├── fitter_test.go
+│       ├── fitters_test.go
 │       ├── gamma.go
 │       ├── gaussian.go
 │       ├── gumbel.go
+│       ├── laplace.go
 │       ├── log_normal.go
+│       ├── numerical_stability_test.go
+│       ├── rayleigh.go
+│       ├── regression_test.go
+│       ├── requirements_test.go
 │       ├── types.go
-│       ├── weibull.go
-│       ├── *_test.go         # Unit-, Regressions-, Robustheits- und Stabilitätstests
-│       
+│       └── weibull.go
 ├── go.mod
 └── go.sum
 ```
@@ -77,11 +91,26 @@ type Fitter interface {
 }
 ```
 
-`Params() []float64` liefert die Werte, `ParamNames() []string` die zugehörigen Namen in gleicher Reihenfolge (z. B. `shape`, `scale`, `location` bei Weibull, `rate` bei Exponential). Die CLI nutzt diese Namen für die Ausgabe.
+`Params() []float64` liefert die Werte, `ParamNames() []string` die zugehörigen Namen in gleicher Reihenfolge (z. B. `shape`, `scale` bei Weibull, `rate` bei Exponential). Die CLI nutzt diese Namen für die Ausgabe.
+
+## Nullwerte (Fast-Fail-Policy)
+
+Die Verteilungen mit positivem Träger behandeln Nullwerte derzeit **streng**: Ein Fit scheitert, statt Nullen stillschweigend zu verwerfen oder den Träger zu verschieben.
+
+- **LogNormal:** scheitert bei jedem Nullwert, da `log(0)` nicht definiert ist.
+- **Gamma und Weibull:** scheitern bei Nullwerten, wenn der Formparameter kleiner als 1 ist. Bei Formparametern größer als 1 ist die Dichte an der Stelle 0 gleich 0 (`LogPDF(0) = −∞`), und der Kandidat scheitert bei der Likelihood-Berechnung. Bei Formparameter genau 1 bleibt der Kandidat gültig.
+- **Rayleigh:** Nullen werden bei der Schätzung ignoriert, die Dichte an der Stelle 0 ist aber 0. Der Kandidat scheitert daher bei jedem Nullwert.
+- **Exponential:** behält Nullwerte; die Dichte an der Stelle 0 ist endlich, der Kandidat ist also nicht betroffen.
+- **Normal, Gumbel, Laplace:** behalten Nullwerte (`CleanDataWithZero`) und sind von dieser Regel nicht betroffen.
+- **Beta:** Der Träger wird aus den Daten abgeleitet (siehe [Bekannte Probleme](#bekannte-probleme-stand-aktueller-prototyp)). Ob Nullwerte scheitern, entscheidet die Dichteprüfung.
+
+Ein fehlgeschlagener Kandidat wird nicht gerankt. Die Nullzahl ist damit ein bewusst sichtbarer Befund und kein stiller Datenverlust.
+
+Die Policy ist eine Zwischenlösung. Später kann ein **Zero-Inflated-Modell** (Mischung aus einer Punktmasse bei 0 und einer stetigen Verteilung für positive Werte) in Betracht kommen. Dieses würde die Nullen als eigenen Mechanismus modellieren und die Vergleichbarkeit mit reinen stetigen Modellen gesondert betrachten.
 
 ## Aktueller CLI-Prototyp
 
-Der bestehende Prototyp unterstützt bereits Dateieingabe, Modellvergleich und Textausgabe. In der getesteten Version sind außerdem die Auswahl aller Kandidaten über `-all` und die JSON-Ausgabe über `-format=json` vorhanden.
+Der Prototyp liest Dateien und wählt standardmäßig das beste Modell nach AIC aus. Flags: `-file` (Pflicht), `-column` (Spaltenname oder 0-basierter Index bei CSV), `-all` (alle Kandidaten, inklusive fehlgeschlagener Fits) und `-format` (`text` oder `json`; nur zusammen mit `-all` wirksam).
 
 Unterstützte Eingabeformate sind `.txt` (ein Wert pro Zeile), `.json` (Array von Zahlen) und `.csv` (Semikolon als Trennzeichen, Header in der ersten Zeile).
 
@@ -101,20 +130,29 @@ Beispiele für die aktuelle flag-basierte Oberfläche:
 ./distfit -file=winequality-red.csv
 ```
 
+## Vergleich mit Scipy
+
+Zur Evaluation der Implementierungen wurde die Python-Bibliothek Scipy als Referenz hinzugezogen.
+`evaluation/compare.py` vergleicht alle neun Verteilungen mit SciPy. Das Skript muss aus dem Repository-Wurzelverzeichnis gestartet werden, da es `go run ./cmd/distfit` aufruft:
+
+```bash
+evaluation/.venv/bin/python evaluation/compare.py --path=testdata/winequality-red.csv --column=density
+```
+
+Pfad und Spalte lassen sich anpassen. Im Virtualenv werden `scipy` und `pandas` benötigt.
+
 Das Flag `-format=json` wird nur zusammen mit `-all` ausgewertet (siehe [Bekannte Probleme](#bekannte-probleme-stand-aktueller-prototyp)).
 
 ## Bekannte Probleme (Stand: aktueller Prototyp)
 
-- **Nullwerte und Träger-Grenzen:** `CleanData` entfernt nur `NaN`, `±Inf` und negative Werte; `0.0` bleibt erhalten. Bei Verteilungen mit positivem Träger führt das zu zwei Fehlbildern:
-  - LogNormal und Gamma scheitern, weil `LogPDF(0) = -∞` ist.
-  - Weibull und Beta verschieben ihren Träger (Weibull `location ≈ 0`, Beta `min ≈ -0.01`), damit `0` gültig wird. Die Fits erhalten dadurch sehr niedrige AIC-Werte.
-  - Beispiel `winequality-red.csv`, Spalte `citric acid`: 132 von 1599 Zeilen sind `0`. Weibull erreicht AIC −2024.58, Normal AIC −690.45. Dieser Vergleich ist nicht belastbar.
-- **Vergleichbarkeit der Modelle:** Der Bericht zeigt nicht, wie viele Werte pro Modell tatsächlich verwendet wurden. Modelle mit unterschiedlichen Stichproben sind nach AIC nicht vergleichbar.
-- **Beta-Fit:** Auf `residual sugar` scheitert die Optimierung (`linesearch: failed to converge`). Der Test `TestFittersRecoverKnownParameters/Beta` ist deshalb aktuell rot. Der Fit schätzt zusätzlich `min` und `max`; die Zählung von `k` und die Vergleichbarkeit mit einer Beta-Verteilung auf `[0, 1]` sind offen.
-- **Debug-Ausgabe:** Beim Lesen von `.csv` schreibt `readData` Dateianfang, Header und erste Datenzeile auf `stdout`. Das macht die Ausgabe von `-format=json` unbrauchbar. Außerdem greift der Code auf `records[0]` und `records[1]` zu, bevor die Länge geprüft wird; sehr kurze CSV-Dateien können dadurch abstürzen.
-- **Stille Verwerfung:** Nicht parsebare Zellen werden in `.txt` und bei Spaltenauswahl ohne Meldung übersprungen. Die Anzahl verworfener Werte wird nur im Einzelmodus ausgegeben, nicht im `-all`-Bericht.
+- **Nullwerte im Modellvergleich:** `CleanData` entfernt `NaN`, `±Inf` und negative Werte; `0.0` bleibt erhalten. Die Fast-Fail-Policy (siehe [Nullwerte](#nullwerte-fast-fail-policy)) verhindert, dass Modelle ihren Träger verschieben.
+- **Beispiel `winequality-red.csv`, Spalte `citric acid`:** 132 von 1599 Zeilen sind `0`. In der aktuellen Ausgabe scheitern Weibull, LogNormal, Gamma und Rayleigh. Beta gewinnt mit AIC −1130.61 vor Exponential (−975.71).
+- **Vergleichbarkeit der Modelle:** Die Bewertungsstichprobe hängt vom Träger ab. Normal und Gumbel behalten negative Werte, die übrigen Kandidaten verwerfen sie. Bei Daten mit negativen Werten sind die AIC-Werte daher nicht vergleichbar. Der Bericht zeigt die Stichprobengröße pro Modell nicht an.
+- **Laplace mit negativen Werten:** Der Fit verwendet negative Werte (`CleanDataWithZero`), die Bewertung (AIC, BIC, KS, RMSE) verwendet sie aber nicht, weil `Laplace` die Markierung `unboundedSupport` nicht implementiert. Das ist ein offener Fehler.
+- **Beta-Fit:** `alpha` und `beta` werden per MLE (L-BFGS) bei festem Träger geschätzt. `min` und `max` sind keine geschätzten Parameter: Sind beide `0`, übernimmt der Fitter die Datenspanne mit 1 % Rand. Für AIC/BIC gilt daher `k = 2`. Bleibt der Optimierer stehen (`ErrNoProgress` / `ErrLinesearcherFailure`), wird der beste Punkt nur übernommen, wenn der Gradient pro Beobachtung unter `1e-6` liegt.
+- **Stille Verwerfung:** Nicht parsebare Zellen werden in `.txt` sowie bei CSV mit und ohne Spaltenauswahl ohne Meldung übersprungen. Die Anzahl verworfener Werte wird nur im Einzelmodus ausgegeben (`Datenpunkte: n (verworfen: m)`), nicht im `-all`-Bericht.
 - **Format im Einzelmodus:** Ohne `-all` wird `-format=json` ignoriert.
-- **Spaltenauswahl:** Ohne `-column` werden bei CSV alle numerischen Zellen aller Spalten zu einem Datensatz vermischt. Das widerspricht dem Ziel aus Abschnitt 4.
+- **Spaltenauswahl:** Ohne `-column` werden bei CSV alle numerischen Zellen aller Spalten zu einem Datensatz vermischt. Das widerspricht dem Ziel unter Punkt 4 der nächsten Entwicklungsschritte.
 
 Die endgültige CLI-Oberfläche soll mit Unterbefehlen leichter auffindbar und erweiterbar werden. Die folgenden Befehle sind das Zielinterface; sie sind nicht zwingend bereits in jedem Build verfügbar.
 
@@ -180,7 +218,7 @@ Die Zahlen dienen nur der Illustration. Die konkrete Tabelle soll auch bei läng
 
 ### JSON-Ausgabe
 
-JSON wird im aktuellen Prototyp bereits ausgegeben. Der nächste Schritt ist, das JSON-Format als stabile Schnittstelle zu definieren und zu testen. Es soll mindestens Eingabemetadaten, Stichprobengröße, Auswahlkriterium, erfolgreiche Modelle, benannte Parameter, Metriken und fehlgeschlagene Fits enthalten.
+JSON wird im aktuellen Prototyp nur mit `-all -format=json` ausgegeben. Der nächste Schritt ist, das JSON-Format als stabile Schnittstelle zu definieren und zu testen. Es soll mindestens Eingabemetadaten, Stichprobengröße, Auswahlkriterium, erfolgreiche Modelle, benannte Parameter, Metriken und fehlgeschlagene Fits enthalten.
 
 Beispiel für die geplante Verwendung:
 
@@ -242,7 +280,7 @@ Ungültige Werte sollen nicht stillschweigend verschwinden. Die CLI soll anzeige
 
 ### 3. Automatisierte Tests ausbauen
 
-- Unit-Tests für jede Verteilung und jeden Fitter ergänzen.
+- Unit-Tests für alle neun Verteilungen und Fitter sind in `pkg/distribution` vorhanden; ergänzt werden Grenzfälle gemäß Punkt 2.
 - Eigenschaften testen: CDF ist monoton und liegt in `[0, 1]`; PDF ist auf dem Support nicht negativ; LogPDF stimmt numerisch mit `log(PDF)` überein, soweit die Dichte nicht unterläuft.
 - Geeignete numerische Integrations- und Grenzwerttests für die Dichte implementieren.
 - Regressionstests mit festen Beispieldatensätzen und erwarteten Ergebnissen ergänzen.
@@ -268,10 +306,10 @@ Mögliche Erweiterungen:
 
 | Priorität | Verteilungen | Hinweise |
 |---|---|---|
-| Früh | Laplace, Logistic, Cauchy | Ergänzen symmetrische Modelle mit unterschiedlichen Tail-Eigenschaften; Cauchy benötigt besondere Behandlung, da gewöhnliche Momente nicht existieren. |
+| Früh | Logistic, Cauchy | Ergänzen symmetrische Modelle mit unterschiedlichen Tail-Eigenschaften; Cauchy benötigt besondere Behandlung, da gewöhnliche Momente nicht existieren. |
 | Früh bis mittel | Log-logistisch, Pareto | Nützlich für positive Daten und schwere rechte Tails. |
 | Mittel | Student-t | Symmetrisch mit einstellbarer Tail-Schwere; Freiheitsgrade müssen robust geschätzt werden. |
-| Mittel | Rayleigh, Chi-Quadrat | Spezialfälle beziehungsweise eng mit vorhandenen Familien verwandt; als eigener Verteilungstyp dennoch praktisch. |
+| Mittel | Chi-Quadrat | Spezialfälle beziehungsweise eng mit vorhandenen Familien verwandt; als eigener Verteilungstyp dennoch praktisch. |
 | Später | Generalized Extreme Value (GEV) | Wertvoll für Extremwertanalysen, aber mit parameterabhängigem Support und anspruchsvoller numerischer Optimierung. |
 
 Jede neue Verteilung benötigt neben PDF/CDF/LogPDF auch einen validierten Fitter, dokumentierte Parameter und Support-Bedingungen sowie eigene Tests. Die Implementierung über `ContinuousDistribution` allein reicht nicht aus, um die Qualität der Parameterschätzung sicherzustellen.
@@ -302,7 +340,7 @@ Performanceoptimierungen sollen auf Benchmarks beruhen und erst nach der fachlic
 # Tests
 go test ./...
 
-# Benchmarks inklusive Allokationszahlen
+# Benchmarks inklusive Allokationszahlen (derzeit sind noch keine Benchmark-Funktionen vorhanden)
 go test -bench=. -benchmem ./...
 
 # CLI bauen

@@ -35,7 +35,7 @@ func TestRegressionFixedDatasets(t *testing.T) {
 			name: "Normal simple dataset",
 			data: []float64{1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0},
 			fitter: NormalFitter{},
-			wantParams: []float64{5.5, 3.027650}, // mu, sigma (sample std dev)
+			wantParams: []float64{5.5, 2.8722813}, // mu, sigma (MLE: Divisor n)
 			wantMetrics: FitMetrics{
 				SampleSize: 10,
 				Discarded:  0,

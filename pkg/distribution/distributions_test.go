@@ -28,6 +28,20 @@ func TestDistributionFunctions(t *testing.T) {
 			cdf:  1 - math.Exp(-2),
 		},
 		{
+			name: "Laplace",
+			dist: Laplace{Mu: 0, Scale: 2},
+			x:    2,
+			pdf:  math.Exp(-1) / 4,
+			cdf:  1 - 0.5*math.Exp(-1),
+		},
+		{
+			name: "Rayleigh",
+			dist: Rayleigh{Scale: 1},
+			x:    1,
+			pdf:  math.Exp(-0.5),
+			cdf:  1 - math.Exp(-0.5),
+		},
+		{
 			name: "Normal",
 			dist: Normal{Mu: 0, Sigma: 1},
 			x:    0,
@@ -87,6 +101,8 @@ func TestDistributionSupportBoundaries(t *testing.T) {
 		{"Beta at minimum", Beta{Alpha: 2, Beta: 2, Min: 0, Max: 1}, 0, 0},
 		{"Beta above maximum", Beta{Alpha: 2, Beta: 2, Min: 0, Max: 1}, 1.1, 1},
 		{"Exponential below zero", Exponential{Lambda: 2}, -0.1, 0},
+		{"Rayleigh below zero", Rayleigh{Scale: 1}, -0.1, 0},
+		{"Rayleigh at zero", Rayleigh{Scale: 1}, 0, 0},
 		{"Gamma at zero", Gamma{Alpha: 2, Beta: 3}, 0, 0},
 		{"LogNormal at zero", LogNormal{Mu: 0, Sigma: 1}, 0, 0},
 		{"Weibull at zero", Weibull{Shape: 2, Scale: 3}, 0, 0},
@@ -115,6 +131,8 @@ func TestDistributionCDFProperties(t *testing.T) {
 	}{
 		{"Beta", Beta{Alpha: 2, Beta: 3, Min: 0, Max: 1}, []float64{-1, 0, 0.25, 0.5, 0.75, 1, 2}},
 		{"Exponential", Exponential{Lambda: 1.5}, []float64{-1, 0, 0.25, 1, 3}},
+		{"Laplace", Laplace{Mu: 1, Scale: 2}, []float64{-5, -1, 0, 1, 3, 7}},
+		{"Rayleigh", Rayleigh{Scale: 1.5}, []float64{-1, 0, 0.25, 1, 3, 10}},
 		{"Normal", Normal{Mu: 1, Sigma: 2}, []float64{-5, -1, 1, 3, 7}},
 		{"Gumbel", Gumbel{Mu: 1, Beta: 2}, []float64{-5, -1, 1, 3, 7}},
 		{"Gamma", Gamma{Alpha: 2, Beta: 3}, []float64{-1, 0, 0.25, 1, 3, 10}},
@@ -150,6 +168,8 @@ func TestDistributionRejectsInvalidParameters(t *testing.T) {
 	}{
 		{"Beta", Beta{Alpha: 2, Beta: 2, Min: 1, Max: 1}},
 		{"Exponential", Exponential{Lambda: 0}},
+		{"Laplace", Laplace{Mu: 0, Scale: 0}},
+		{"Rayleigh", Rayleigh{Scale: 0}},
 		{"Normal", Normal{Mu: 0, Sigma: 0}},
 		{"Gumbel", Gumbel{Mu: 0, Beta: 0}},
 		{"Gamma", Gamma{Alpha: 2, Beta: 0}},

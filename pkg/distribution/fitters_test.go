@@ -22,6 +22,8 @@ func TestFittersFitValidData(t *testing.T) {
 		{"Gamma", GammaFitter{}, 2, false},
 		{"LogNormal", LogNormalFitter{}, 2, false},
 		{"Weibull", WeibullFitter{}, 2, false},
+		{"Laplace", LaplaceFitter{}, 2, true},
+		{"Rayleigh", RayleighFitter{}, 1, false},
 	}
 
 	for _, tt := range tests {
@@ -78,6 +80,9 @@ func TestFittersRejectInsufficientOrInvalidData(t *testing.T) {
 		{"Gamma needs varying observations", GammaFitter{}, []float64{1}},
 		{"LogNormal needs varying observations", LogNormalFitter{}, []float64{1}},
 		{"Weibull needs at least two observations", WeibullFitter{}, []float64{1}},
+		{"Laplace needs at least two observations", LaplaceFitter{}, []float64{1}},
+		{"Laplace needs a positive scale", LaplaceFitter{}, []float64{2, 2, 2}},
+		{"Rayleigh needs positive observations", RayleighFitter{}, []float64{0, 0}},
 		{"Beta rejects values on specified boundaries", BetaFitter{Min: 0, Max: 1}, []float64{0, 0.3, 0.8}},
 	}
 
@@ -107,4 +112,44 @@ func TestExponentialFitterRate(t *testing.T) {
 	if math.IsNaN(got.Lambda) || math.Abs(got.Lambda-want) > 1e-12*(1+math.Abs(want)) {
 		t.Errorf("rate = %.16g, want %.16g", got.Lambda, want)
 	}
+}
+
+func TestLaplaceFitterClosedForm(t *testing.T) {
+	tests := []struct {
+		name      string
+		data      []float64
+		wantMu    float64
+		wantScale float64
+	}{
+		{"even count uses mean of middle values", []float64{1, 2, 3, 4}, 2.5, 1},
+		{"odd count uses middle value", []float64{1, 2, 10}, 2, 3},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dist, err := (LaplaceFitter{}).Fit(tt.data)
+			if err != nil {
+				t.Fatalf("Fit() error = %v", err)
+			}
+			got, ok := dist.(Laplace)
+			if !ok {
+				t.Fatalf("Fit() returned %T, want Laplace", dist)
+			}
+			assertNear(t, "Mu", got.Mu, tt.wantMu)
+			assertNear(t, "Scale", got.Scale, tt.wantScale)
+		})
+	}
+}
+
+func TestRayleighFitterClosedForm(t *testing.T) {
+	// σ = sqrt(sum(x²) / (2n)) = sqrt(16 / 8) = sqrt(2)
+	dist, err := (RayleighFitter{}).Fit([]float64{2, 2, 2, 2})
+	if err != nil {
+		t.Fatalf("Fit() error = %v", err)
+	}
+	got, ok := dist.(Rayleigh)
+	if !ok {
+		t.Fatalf("Fit() returned %T, want Rayleigh", dist)
+	}
+	assertNear(t, "Scale", got.Scale, math.Sqrt2)
 }

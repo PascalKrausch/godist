@@ -61,8 +61,9 @@ func (f NormalFitter) Fit(data []float64) (ContinuousDistribution, error) {
 		return nil, errors.New("zu wenige gültige Datenpunkte für Normalverteilung")
 	}
 
+	// MLE: Varianz mit Divisor n (nicht n-1)
 	mu := stat.Mean(cleaned, nil)
-	variance := stat.Variance(cleaned, nil)
+	variance := stat.Variance(cleaned, nil) * float64(len(cleaned)-1) / float64(len(cleaned))
 	sigma := math.Sqrt(variance)
 
 	if sigma <= 0 || !IsFinite(sigma) {

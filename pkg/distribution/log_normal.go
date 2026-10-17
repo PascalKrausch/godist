@@ -60,15 +60,22 @@ func (f LogNormalFitter) Fit(data []float64) (ContinuousDistribution, error) {
 		return nil, ErrEmptyData
 	}
 
+	// Strenge Nullwert-Policy (Fast-Fail): log(0) ist -Inf, daher kein Fit.
+	for _, x := range cleaned {
+		if x == 0 {
+			return nil, ErrFitFailed
+		}
+	}
+
 	// Transformation Y = ln(X)
 	logs := make([]float64, len(cleaned))
 	for i, x := range cleaned {
 		logs[i] = math.Log(x)
 	}
 
-	// MLE für Normalverteilung auf logarithmierten Daten
+	// MLE für Normalverteilung auf logarithmierten Daten (Varianz mit Divisor n)
 	mu := stat.Mean(logs, nil)
-	variance := stat.Variance(logs, nil)
+	variance := stat.Variance(logs, nil) * (n - 1) / n
 	sigma := math.Sqrt(variance)
 
 	if sigma <= 0 || math.IsNaN(sigma) {

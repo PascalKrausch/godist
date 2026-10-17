@@ -63,38 +63,35 @@ func (f WeibullFitter) Name() string {
 
 func (f WeibullFitter) Fit(data []float64) (ContinuousDistribution, error) {
 	cleaned := CleanData(data)
-	n := float64(len(cleaned))
-	if n == 0 {
+	if len(cleaned) == 0 {
 		return nil, ErrEmptyData
 	}
 
+	// Schätzung auf den positiven Werten; Nullen werden unten gegen den Formparameter geprüft.
+	positive := make([]float64, 0, len(cleaned))
+	for _, x := range cleaned {
+		if x > 0 {
+			positive = append(positive, x)
+		}
+	}
+	hasZeros := len(positive) < len(cleaned)
+	if len(positive) == 0 {
+		return nil, ErrFitFailed
+	}
+
 	// Transformation: Logarithmiere die Daten für MLE
-	logs := make([]float64, len(cleaned))
-	for i, x := range cleaned {
+	logs := make([]float64, len(positive))
+	for i, x := range positive {
 		logs[i] = math.Log(x)
 	}
 
-	// Startwert für Shape basierend auf der Variationskoeffizient-Methode
-	mean := stat.Mean(cleaned, nil)
-	if mean <= 0 || !IsFinite(mean) {
+	shape, ok := solveWeibullShape(logs)
+	if !ok {
 		return nil, ErrFitFailed
 	}
 
-	stdDev := stat.StdDev(cleaned, nil)
-	cv := stdDev / mean
-	if cv <= 0 || !IsFinite(cv) {
-		return nil, ErrFitFailed
-	}
-
-	// Näherung für Shape aus der Variationskoeffizient-Methode
-	shape := math.Pow(cv, -1.086)
-	if !IsFinite(shape) || shape <= 0 {
-		shape = 1.0
-	}
-
-	// Newton-Raphson Verfeinerung für Shape (MLE)
-	shape = refineWeibullShape(logs, shape)
-	if !IsFinite(shape) || shape <= 0 {
+	// Strenge Nullwert-Policy (Fast-Fail): Bei Formparameter < 1 ist die Dichte an 0 unendlich.
+	if hasZeros && shape < 1 {
 		return nil, ErrFitFailed
 	}
 
@@ -107,57 +104,53 @@ func (f WeibullFitter) Fit(data []float64) (ContinuousDistribution, error) {
 	return Weibull{Shape: shape, Scale: scale}, nil
 }
 
-// refineWeibullShape verfeinert den Shape-Parameter per Newton-Raphson für MLE.
-func refineWeibullShape(logs []float64, initial float64) float64 {
-	k := initial
-	if !IsFinite(k) || k <= 0 {
-		k = 1.0
-	}
-
+// solveWeibullShape bestimmt den Shape-MLE als Nullstelle der Score-Gleichung
+//
+//	g(k) = Σ xᵢᵏ ln xᵢ / Σ xᵢᵏ − mean(ln x) − 1/k
+//
+// g ist streng monoton steigend in k, daher ist die Bisektion auf einem Intervall
+// mit Vorzeichenwechsel global konvergent (anders als eine Fixpunktiteration).
+func solveWeibullShape(logs []float64) (float64, bool) {
 	meanLog := stat.Mean(logs, nil)
-
-	// Maximum Log für numerische Stabilität gegen Exp-Overflow
 	maxLog := logs[0]
-	for _, logY := range logs[1:] {
-		if logY > maxLog {
-			maxLog = logY
+	for _, l := range logs[1:] {
+		if l > maxLog {
+			maxLog = l
 		}
 	}
 
-	const maxIterations = 20
-	const tolerance = 1e-8
-
-	for iter := 0; iter < maxIterations; iter++ {
+	g := func(k float64) float64 {
 		sumPow := 0.0
 		sumPowLog := 0.0
-		for _, logY := range logs {
-			pow := math.Exp(k * (logY - maxLog))
-			sumPow += pow
-			sumPowLog += pow * logY
+		for _, l := range logs {
+			w := math.Exp(k * (l - maxLog))
+			sumPow += w
+			sumPowLog += w * l
 		}
-
-		if sumPow <= 0 || !IsFinite(sumPow) {
-			break
-		}
-
-		denom := sumPowLog/sumPow - meanLog
-		if denom <= 0 || !IsFinite(denom) {
-			break
-		}
-
-		next := 1.0 / denom
-		if !IsFinite(next) || next <= 0 {
-			break
-		}
-
-		if math.Abs(next-k) <= tolerance*math.Max(1, k) {
-			k = next
-			break
-		}
-		k = next
+		return sumPowLog/sumPow - meanLog - 1.0/k
 	}
 
-	return math.Max(k, 1e-6)
+	lo, hi := 1e-3, 1e3
+	gLo, gHi := g(lo), g(hi)
+	if !IsFinite(gLo) || !IsFinite(gHi) || gLo > 0 || gHi < 0 {
+		return 0, false
+	}
+
+	for iter := 0; iter < 200 && hi-lo > 1e-12*hi; iter++ {
+		mid := 0.5 * (lo + hi)
+		gMid := g(mid)
+		if gMid == 0 {
+			return mid, true
+		}
+		if gMid < 0 {
+			lo = mid
+		} else {
+			hi = mid
+		}
+	}
+
+	k := 0.5 * (lo + hi)
+	return k, IsFinite(k) && k > 0
 }
 
 // weibullScaleFromLogs berechnet den Scale-Parameter aus Shape und logarithmierten Daten.

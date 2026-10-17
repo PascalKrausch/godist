@@ -24,8 +24,8 @@ func EvaluateFit(dist ContinuousDistribution, data []float64) (FitMetrics, error
 	ll := 0.0
 	for _, x := range sortedData {
 		logPdf := dist.LogPDF(x)
-		if math.IsInf(logPdf, -1) || math.IsNaN(logPdf) {
-			// Falls Datenpunkt außerhalb des Trägers liegt oder numerischer Fehler auftritt
+		if !IsFinite(logPdf) {
+			// Außerhalb des Trägers (-Inf), singuläre Dichte (+Inf) oder numerischer Fehler (NaN)
 			return FitMetrics{LogLikelihood: math.Inf(-1), Converged: false}, ErrFitFailed
 		}
 		ll += logPdf
@@ -136,6 +136,8 @@ func SelectAllModels(data []float64) ([]FitResult, []FitFailure, error) {
 		BetaFitter{},
 		ExponentialFitter{},
 		GumbelFitter{},
+		RayleighFitter{},
+		LaplaceFitter{},
 	}
 
 	var results []FitResult

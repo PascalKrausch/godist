@@ -70,22 +70,60 @@ func sampleGumbel(rng *rand.Rand, mu, beta float64, n int) []float64 {
 	return out
 }
 
-func sampleBeta(rng *rand.Rand, alpha, betaParam float64, n int) []float64 {
+// Laplace: mu ± b·Exp(1) mit zufälligem Vorzeichen.
+func sampleLaplace(rng *rand.Rand, mu, b float64, n int) []float64 {
 	out := make([]float64, n)
 	for i := range out {
-		// Rejection sampling für Beta-Verteilung
-		for {
-			u1 := rng.Float64()
-			u2 := rng.Float64()
-			x := math.Pow(u1, 1/alpha)
-			y := math.Pow(u2, 1/betaParam)
-			if x+y <= 1 {
-				out[i] = x / (x + y)
-				break
-			}
+		e := -math.Log(1 - rng.Float64())
+		if rng.Float64() < 0.5 {
+			e = -e
 		}
+		out[i] = mu + b*e
 	}
 	return out
+}
+
+// Rayleigh per Inversionsmethode: σ·sqrt(-2·ln(1-U)).
+func sampleRayleigh(rng *rand.Rand, sigma float64, n int) []float64 {
+	out := make([]float64, n)
+	for i := range out {
+		out[i] = sigma * math.Sqrt(-2*math.Log(1-rng.Float64()))
+	}
+	return out
+}
+
+func sampleBeta(rng *rand.Rand, alpha, betaParam float64, n int) []float64 {
+	out := make([]float64, n)
+
+	for i := range out {
+		x := sampleGammaUnit(rng, alpha)
+		y := sampleGammaUnit(rng, betaParam)
+		out[i] = x / (x + y)
+	}
+
+	return out
+}
+
+// sampleGammaUnit zieht eine Gamma(α, 1)-Zufallszahl für beliebiges α > 0
+// (Marsaglia-Tsang; für α < 1 mit der Boost-Transformation).
+func sampleGammaUnit(rng *rand.Rand, alpha float64) float64 {
+	if alpha < 1 {
+		return sampleGammaUnit(rng, alpha+1) * math.Pow(rng.Float64(), 1/alpha)
+	}
+	d := alpha - 1.0/3.0
+	c := 1 / math.Sqrt(9*d)
+	for {
+		x := rng.NormFloat64()
+		v := 1 + c*x
+		if v <= 0 {
+			continue
+		}
+		v = v * v * v
+		u := rng.Float64()
+		if u < 1-0.0331*x*x*x*x || math.Log(u) < 0.5*x*x+d*(1-v+math.Log(v)) {
+			return d * v
+		}
+	}
 }
 
 func assertRelative(t *testing.T, label string, got, want, tol float64) {
@@ -175,6 +213,26 @@ func TestFittersRecoverKnownParameters(t *testing.T) {
 		assertRelative(t, "Alpha", b.Alpha, 2, 0.1)
 		assertRelative(t, "Beta", b.Beta, 3, 0.1)
 	})
+
+	t.Run("Laplace", func(t *testing.T) {
+		data := sampleLaplace(rng, 3, 2, sampleSize)
+		dist, err := LaplaceFitter{}.Fit(data)
+		if err != nil {
+			t.Fatal(err)
+		}
+		l := dist.(Laplace)
+		assertRelative(t, "Mu", l.Mu, 3, tol)
+		assertRelative(t, "Scale", l.Scale, 2, tol)
+	})
+
+	t.Run("Rayleigh", func(t *testing.T) {
+		data := sampleRayleigh(rng, 2, sampleSize)
+		dist, err := RayleighFitter{}.Fit(data)
+		if err != nil {
+			t.Fatal(err)
+		}
+		assertRelative(t, "Scale", dist.(Rayleigh).Scale, 2, tol)
+	})
 }
 
 // Anforderung: AIC = 2k − 2·LL und BIC = k·ln(n) − 2·LL mit k = Anzahl der
@@ -238,6 +296,8 @@ func TestPDFIntegratesToCDFDifference(t *testing.T) {
 	}{
 		{"Normal", Normal{Mu: 0, Sigma: 1}, -2, 1.5},
 		{"Exponential", Exponential{Lambda: 0.7}, 0.1, 4},
+		{"Laplace", Laplace{Mu: 0.5, Scale: 1.2}, -4, 6},
+		{"Rayleigh", Rayleigh{Scale: 1.5}, 0.05, 5},
 		{"LogNormal", LogNormal{Mu: 0.2, Sigma: 0.5}, 0.2, 3},
 		{"Gamma", Gamma{Alpha: 2.5, Beta: 1.5}, 0.1, 9},
 		{"Weibull", Weibull{Shape: 1.8, Scale: 2}, 0.05, 5},
@@ -274,6 +334,8 @@ func TestLogPDFMatchesLogOfPDF(t *testing.T) {
 	dists := []ContinuousDistribution{
 		Normal{Mu: 1, Sigma: 2},
 		Exponential{Lambda: 1.3},
+		Laplace{Mu: 0.5, Scale: 1.2},
+		Rayleigh{Scale: 1.5},
 		LogNormal{Mu: 0.1, Sigma: 0.6},
 		Gamma{Alpha: 3, Beta: 2},
 		Weibull{Shape: 2, Scale: 4},

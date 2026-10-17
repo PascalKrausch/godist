@@ -269,6 +269,10 @@ func getDistributionName(dist distribution.ContinuousDistribution) string {
 		return "Exponential"
 	case distribution.Gumbel:
 		return "Gumbel"
+	case distribution.Laplace:
+		return "Laplace"
+	case distribution.Rayleigh:
+		return "Rayleigh"
 	default:
 		return "Unknown"
 	}

@@ -103,13 +103,6 @@ func readData(path string, column string) ([]float64, string, error) {
 		return data, "", scanner.Err()
 
 	case ".csv":
-		buf := make([]byte, 200)
-		n, err := file.Read(buf)
-		if err != nil && err != io.EOF {
-			return nil, "", err
-		}
-		fmt.Printf("Dateianfang: %q\n", buf[:n])
-
 		if _, err := file.Seek(0, io.SeekStart); err != nil {
 			return nil, "", err
 		}
@@ -118,8 +111,6 @@ func readData(path string, column string) ([]float64, string, error) {
 		reader.LazyQuotes = false
 		reader.TrimLeadingSpace = true
 		records, err := reader.ReadAll()
-		fmt.Printf("Header: %#v\n", records[0])
-		fmt.Printf("Erste Datenzeile: %#v\n", records[1])
 		if err != nil {
 			return nil, "", fmt.Errorf("Fehler beim Lesen der CSV-Datei: %w", err)
 		}

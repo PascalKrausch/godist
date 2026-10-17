@@ -198,6 +198,9 @@ func fitBetaMLE(
 	//
 	// Die Gradienten sind bereits nach der Kettenregel
 	// auf die logarithmierten Parameter umgerechnet.
+	bestZ := []float64{math.NaN(), math.NaN()}
+	bestF := math.Inf(1)
+
 	problem := optimize.Problem{
 		Func: func(z []float64) float64 {
 			invalid := math.Inf(1)
@@ -230,6 +233,11 @@ func fitBetaMLE(
 
 			if !isFinite(f) {
 				return invalid
+			}
+
+			if f < bestF {
+				bestF = f
+				bestZ = []float64{z[0], z[1]}
 			}
 
 			return f
@@ -292,22 +300,44 @@ func fitBetaMLE(
 		settings,
 		&optimize.LBFGS{},
 	)
+
+	var x []float64
 	if err != nil {
-		return 0, 0, fmt.Errorf(
-			"Beta-MLE-Optimierung fehlgeschlagen: %w",
-			err,
-		)
+		// ErrNoProgress tritt nahe am Optimum auf, wenn die Schrittweite
+		// unter die Rundungsgenauigkeit fällt. Der beste gesehene Punkt
+		// wird nur akzeptiert, wenn der Gradient pro Beobachtung klein ist.
+		if (!errors.Is(err, optimize.ErrNoProgress) &&
+			!errors.Is(err, optimize.ErrLinesearcherFailure)) ||
+			math.IsNaN(bestZ[0]) {
+			return 0, 0, fmt.Errorf(
+				"Beta-MLE-Optimierung fehlgeschlagen: %w",
+				err,
+			)
+		}
+
+		grad := make([]float64, 2)
+		problem.Grad(grad, bestZ)
+		maxGrad := math.Max(math.Abs(grad[0]), math.Abs(grad[1]))
+		if !isFinite(maxGrad) || maxGrad/n > 1e-6 {
+			return 0, 0, fmt.Errorf(
+				"Beta-MLE-Optimierung fehlgeschlagen: %w",
+				err,
+			)
+		}
+
+		x = bestZ
+	} else {
+		if result.Status.Early() {
+			return 0, 0, fmt.Errorf(
+				"Beta-MLE nicht konvergiert: %s",
+				result.Status,
+			)
+		}
+		x = result.X
 	}
 
-	if result.Status.Early() {
-		return 0, 0, fmt.Errorf(
-			"Beta-MLE nicht konvergiert: %s",
-			result.Status,
-		)
-	}
-
-	alpha := math.Exp(result.X[0])
-	betaParam := math.Exp(result.X[1])
+	alpha := math.Exp(x[0])
+	betaParam := math.Exp(x[1])
 
 	if !isFinite(alpha) || !isFinite(betaParam) ||
 		alpha <= 0 || betaParam <= 0 {
