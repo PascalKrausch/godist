@@ -91,7 +91,7 @@ func (f BetaFitter) Name() string {
 }
 
 func (f BetaFitter) Fit(data []float64) (ContinuousDistribution, error) {
-	cleaned := CleanData(data)
+	cleaned := CleanDataWithZero(data)
 	if len(cleaned) < 3 {
 		return nil, errors.New("zu wenige Datenpunkte für Beta-Fit")
 	}

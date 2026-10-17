@@ -104,6 +104,8 @@ Die Verteilungen mit positivem Träger behandeln Nullwerte derzeit **streng**: E
 - **Normal, Gumbel, Laplace:** behalten Nullwerte (`CleanDataWithZero`) und sind von dieser Regel nicht betroffen.
 - **Beta:** Der Träger wird aus den Daten abgeleitet (siehe [Bekannte Probleme](#bekannte-probleme-stand-aktueller-prototyp)). Ob Nullwerte scheitern, entscheidet die Dichteprüfung.
 
+**Negative Werte** werden ebenfalls über die Trägerprüfung behandelt: Exponential, Gamma, Weibull, LogNormal und Rayleigh lehnen jeden negativen Wert mit `ErrNegativeValues` ab. Normal, Gumbel und Laplace sowie Beta (Träger aus den Daten) verarbeiten negative Werte. Alle Kandidaten werten so dieselbe Stichprobe aus.
+
 Ein fehlgeschlagener Kandidat wird nicht gerankt. Die Nullzahl ist damit ein bewusst sichtbarer Befund und kein stiller Datenverlust.
 
 Die Policy ist eine Zwischenlösung. Später kann ein **Zero-Inflated-Modell** (Mischung aus einer Punktmasse bei 0 und einer stetigen Verteilung für positive Werte) in Betracht kommen. Dieses würde die Nullen als eigenen Mechanismus modellieren und die Vergleichbarkeit mit reinen stetigen Modellen gesondert betrachten.
@@ -145,12 +147,11 @@ Das Flag `-format=json` wird nur zusammen mit `-all` ausgewertet (siehe [Bekannt
 
 ## Bekannte Probleme (Stand: aktueller Prototyp)
 
-- **Nullwerte im Modellvergleich:** `CleanData` entfernt `NaN`, `±Inf` und negative Werte; `0.0` bleibt erhalten. Die Fast-Fail-Policy (siehe [Nullwerte](#nullwerte-fast-fail-policy)) verhindert, dass Modelle ihren Träger verschieben.
+- **Nullwerte im Modellvergleich:** `CleanDataWithZero` entfernt nur `NaN` und `±Inf`; `0.0` und negative Werte bleiben erhalten. Die Fast-Fail-Policy (siehe [Nullwerte](#nullwerte-fast-fail-policy)) verhindert, dass Modelle ihren Träger verschieben.
 - **Beispiel `winequality-red.csv`, Spalte `citric acid`:** 132 von 1599 Zeilen sind `0`. In der aktuellen Ausgabe scheitern Weibull, LogNormal, Gamma und Rayleigh. Beta gewinnt mit AIC −1130.61 vor Exponential (−975.71).
-- **Vergleichbarkeit der Modelle:** Die Bewertungsstichprobe hängt vom Träger ab. Normal und Gumbel behalten negative Werte, die übrigen Kandidaten verwerfen sie. Bei Daten mit negativen Werten sind die AIC-Werte daher nicht vergleichbar. Der Bericht zeigt die Stichprobengröße pro Modell nicht an.
-- **Laplace mit negativen Werten:** Der Fit verwendet negative Werte (`CleanDataWithZero`), die Bewertung (AIC, BIC, KS, RMSE) verwendet sie aber nicht, weil `Laplace` die Markierung `unboundedSupport` nicht implementiert. Das ist ein offener Fehler.
+- **Vergleichbarkeit der Modelle:** Alle Kandidaten werten dieselbe Stichprobe aus. Bei negativen Werten scheiden die Positivträger-Modelle aus (`ErrNegativeValues`), sodass der Vergleich dann nur Normal, Gumbel, Laplace und Beta umfasst. Der Bericht zeigt die Stichprobengröße pro Modell nicht an.
 - **Beta-Fit:** `alpha` und `beta` werden per MLE (L-BFGS) bei festem Träger geschätzt. `min` und `max` sind keine geschätzten Parameter: Sind beide `0`, übernimmt der Fitter die Datenspanne mit 1 % Rand. Für AIC/BIC gilt daher `k = 2`. Bleibt der Optimierer stehen (`ErrNoProgress` / `ErrLinesearcherFailure`), wird der beste Punkt nur übernommen, wenn der Gradient pro Beobachtung unter `1e-6` liegt.
-- **Stille Verwerfung:** Nicht parsebare Zellen werden in `.txt` sowie bei CSV mit und ohne Spaltenauswahl ohne Meldung übersprungen. Die Anzahl verworfener Werte wird nur im Einzelmodus ausgegeben (`Datenpunkte: n (verworfen: m)`), nicht im `-all`-Bericht.
+- **Stille Verwerfung:** Nicht parsebare Zellen sowie `NaN` und `±Inf` werden in `.txt` sowie bei CSV mit und ohne Spaltenauswahl ohne Meldung übersprungen. Die Anzahl verworfener Werte wird nur im Einzelmodus ausgegeben (`Datenpunkte: n (verworfen: m)`), nicht im `-all`-Bericht.
 - **Format im Einzelmodus:** Ohne `-all` wird `-format=json` ignoriert.
 - **Spaltenauswahl:** Ohne `-column` werden bei CSV alle numerischen Zellen aller Spalten zu einem Datensatz vermischt. Das widerspricht dem Ziel unter Punkt 4 der nächsten Entwicklungsschritte.
 

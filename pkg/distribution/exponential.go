@@ -49,7 +49,10 @@ func (f ExponentialFitter) Name() string {
 }
 
 func (f ExponentialFitter) Fit(data []float64) (ContinuousDistribution, error) {
-	cleaned := CleanData(data)
+	cleaned := CleanDataWithZero(data)
+	if err := checkNonNegative(cleaned); err != nil {
+		return nil, err
+	}
 	if len(cleaned) < 1 {
 		return nil, errors.New("zu wenige gültige Datenpunkte für Exponentialverteilung")
 	}

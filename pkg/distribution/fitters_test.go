@@ -1,6 +1,7 @@
 package distribution
 
 import (
+	"errors"
 	"math"
 	"testing"
 )
@@ -10,20 +11,21 @@ func TestFittersFitValidData(t *testing.T) {
 	withInvalidValues := []float64{1, 2, math.NaN(), 3, math.Inf(1), 4, -1, 5, 6, 7, 8, 9, 10}
 	withNonFiniteOnly := []float64{1, 2, math.NaN(), 3, math.Inf(1), 4, 5, 6, 7, 8, 9, 10}
 	tests := []struct {
-		name          string
-		fitter        Fitter
-		paramCount    int
-		negativeValid bool
+		name       string
+		fitter     Fitter
+		paramCount int
+		// rejectsNegative: Trägerbedingung [0, ∞) bzw. (0, ∞); negative Werte führen zu ErrNegativeValues.
+		rejectsNegative bool
 	}{
 		{"Beta", BetaFitter{}, 4, false},
-		{"Exponential", ExponentialFitter{}, 1, false},
-		{"Normal", NormalFitter{}, 2, true},
-		{"Gumbel", GumbelFitter{}, 2, true},
-		{"Gamma", GammaFitter{}, 2, false},
-		{"LogNormal", LogNormalFitter{}, 2, false},
-		{"Weibull", WeibullFitter{}, 2, false},
-		{"Laplace", LaplaceFitter{}, 2, true},
-		{"Rayleigh", RayleighFitter{}, 1, false},
+		{"Exponential", ExponentialFitter{}, 1, true},
+		{"Normal", NormalFitter{}, 2, false},
+		{"Gumbel", GumbelFitter{}, 2, false},
+		{"Gamma", GammaFitter{}, 2, true},
+		{"LogNormal", LogNormalFitter{}, 2, true},
+		{"Weibull", WeibullFitter{}, 2, true},
+		{"Laplace", LaplaceFitter{}, 2, false},
+		{"Rayleigh", RayleighFitter{}, 1, true},
 	}
 
 	for _, tt := range tests {
@@ -49,18 +51,20 @@ func TestFittersFitValidData(t *testing.T) {
 				t.Errorf("EvaluateFit() returned invalid metrics: %+v", metrics)
 			}
 
-			cleanedInput := withInvalidValues
-			if tt.negativeValid {
-				cleanedInput = withNonFiniteOnly
-			}
-			filteredDist, err := tt.fitter.Fit(cleanedInput)
+			filteredDist, err := tt.fitter.Fit(withNonFiniteOnly)
 			if err != nil {
-				t.Fatalf("%s.Fit() with values removed by CleanData returned error: %v", tt.name, err)
+				t.Fatalf("%s.Fit() with NaN/Inf removed returned error: %v", tt.name, err)
 			}
 			for i, want := range dist.Params() {
 				got := filteredDist.Params()[i]
 				if math.IsNaN(got) || math.Abs(got-want) > 1e-12*(1+math.Abs(want)) {
 					t.Errorf("parameter after cleaning[%d] = %.16g, want %.16g", i, got, want)
+				}
+			}
+
+			if tt.rejectsNegative {
+				if _, err := tt.fitter.Fit(withInvalidValues); !errors.Is(err, ErrNegativeValues) {
+					t.Errorf("%s.Fit() with negative values error = %v, want ErrNegativeValues", tt.name, err)
 				}
 			}
 		})

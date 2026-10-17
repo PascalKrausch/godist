@@ -223,6 +223,12 @@ def main():
     )
     parser.add_argument("--path", required=True)
     parser.add_argument("--column", required=True)
+    parser.add_argument(
+        "--tol",
+        type=float,
+        default=1e-3,
+        help="maximale Abweichung für AIC und KS, sonst Exit-Code 1",
+    )
     args = parser.parse_args()
 
     data, col_name = load_data(args.path, args.column)
@@ -249,6 +255,7 @@ def main():
     )
     print("-" * 68)
 
+    mismatches = []
     scipy_results = {}
     for name in [
         "Gumbel", "Beta", "LogNormal", "Gamma",
@@ -267,10 +274,16 @@ def main():
         if gr is None:
             print(f"{name:<13} {'—':>10} {sr['aic']:>10.2f} "
                   f"{'—':>10} {'—':>9} {sr['ks']:>10.4f}")
+            mismatches.append(f"{name}: fehlt im Go-Ergebnis")
             continue
 
         aic_go = gr["aic"]
         ks_go = gr["ks_statistic"]
+
+        if abs(aic_go - sr["aic"]) > args.tol:
+            mismatches.append(f"{name}: AIC-Abweichung {aic_go - sr['aic']:.6f}")
+        if abs(ks_go - sr["ks"]) > args.tol:
+            mismatches.append(f"{name}: KS-Abweichung {ks_go - sr['ks']:.6f}")
 
         print(
             f"{name:<13} {aic_go:>10.2f} {sr['aic']:>10.2f} "
@@ -297,6 +310,13 @@ def main():
             scipy_results.items(), key=lambda item: item[1]["aic"]
         )
         print("SciPy-Sieger:", best_scipy[0])
+
+    if mismatches:
+        print(f"\nAbweichungen über Toleranz {args.tol}:")
+        for m in mismatches:
+            print(f"  - {m}")
+        sys.exit(1)
+    print(f"\nAlle Modelle innerhalb Toleranz {args.tol}.")
 
 
 if __name__ == "__main__":

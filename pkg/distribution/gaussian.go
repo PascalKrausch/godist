@@ -50,11 +50,6 @@ func (f NormalFitter) Name() string {
 	return "Normal"
 }
 
-// unboundedSupport: Normalverteilung hat Träger ℝ, negative Werte sind gültig.
-func (n Normal) unboundedSupport() bool {
-	return true
-}
-
 func (f NormalFitter) Fit(data []float64) (ContinuousDistribution, error) {
 	cleaned := CleanDataWithZero(data)
 	if len(cleaned) < 2 {

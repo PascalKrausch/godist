@@ -1,6 +1,7 @@
 package distribution
 
 import (
+	"errors"
 	"math"
 	"sort"
 
@@ -8,20 +9,7 @@ import (
 	"gonum.org/v1/gonum/stat"
 )
 
-// CleanData entfernt ungültige Werte (NaN, Inf, negative) aus einem Datensatz.
-// Dies ist eine generische Funktion für alle Verteilungen, die positive Daten benötigen.
-func CleanData(data []float64) []float64 {
-	out := make([]float64, 0, len(data))
-	for _, v := range data {
-		if math.IsNaN(v) || math.IsInf(v, 0) || v < 0 {
-			continue
-		}
-		out = append(out, v)
-	}
-	return out
-}
-
-// CleanDataWithZero entfernt nur NaN und Inf, behält aber Nullwerte.
+// CleanDataWithZero entfernt nur NaN und Inf, behält aber Nullwerte und negative Werte.
 func CleanDataWithZero(data []float64) []float64 {
 	out := make([]float64, 0, len(data))
 	for _, v := range data {
@@ -31,6 +19,19 @@ func CleanDataWithZero(data []float64) []float64 {
 		out = append(out, v)
 	}
 	return out
+}
+
+// ErrNegativeValues signalisiert, dass Daten außerhalb des Trägers einer Verteilung mit Träger [0, ∞) liegen.
+var ErrNegativeValues = errors.New("negative werte liegen außerhalb des trägers")
+
+// checkNonNegative liefert ErrNegativeValues, wenn der Datensatz einen negativen Wert enthält (Fast-Fail).
+func checkNonNegative(data []float64) error {
+	for _, v := range data {
+		if v < 0 {
+			return ErrNegativeValues
+		}
+	}
+	return nil
 }
 
 // SampleSummary enthält statistische Kennzahlen eines Datensatzes.

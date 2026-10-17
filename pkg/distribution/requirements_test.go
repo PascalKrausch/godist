@@ -369,7 +369,7 @@ func TestEvaluateFitRejectsOutOfSupportData(t *testing.T) {
 
 // Anforderung: Ein Datensatz ohne gültige Werte liefert ErrEmptyData.
 func TestEvaluateFitRejectsAllInvalidData(t *testing.T) {
-	invalid := []float64{math.NaN(), math.Inf(1), -1, -2}
+	invalid := []float64{math.NaN(), math.Inf(1), math.Inf(-1)}
 	_, err := EvaluateFit(Exponential{Lambda: 1}, invalid)
 	if !errors.Is(err, ErrEmptyData) {
 		t.Fatalf("EvaluateFit() error = %v, want ErrEmptyData", err)
@@ -428,12 +428,12 @@ func TestBetaInformationCriteriaCountOnlyFreeParameters(t *testing.T) {
 // müssen in den Metriken sichtbar sein.
 func TestEvaluateFitReportsDiscardedValues(t *testing.T) {
 	data := []float64{1, 2, math.NaN(), -3, math.Inf(1), 4}
-	metrics, err := EvaluateFit(Exponential{Lambda: 0.5}, data)
+	metrics, err := EvaluateFit(Normal{Mu: 0, Sigma: 5}, data)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if metrics.SampleSize != 3 || metrics.Discarded != 3 {
-		t.Errorf("SampleSize = %d, Discarded = %d, want 3 and 3", metrics.SampleSize, metrics.Discarded)
+	if metrics.SampleSize != 4 || metrics.Discarded != 2 {
+		t.Errorf("SampleSize = %d, Discarded = %d, want 4 and 2", metrics.SampleSize, metrics.Discarded)
 	}
 }
 

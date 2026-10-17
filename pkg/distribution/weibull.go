@@ -62,7 +62,10 @@ func (f WeibullFitter) Name() string {
 }
 
 func (f WeibullFitter) Fit(data []float64) (ContinuousDistribution, error) {
-	cleaned := CleanData(data)
+	cleaned := CleanDataWithZero(data)
+	if err := checkNonNegative(cleaned); err != nil {
+		return nil, err
+	}
 	if len(cleaned) == 0 {
 		return nil, ErrEmptyData
 	}

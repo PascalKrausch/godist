@@ -123,6 +123,18 @@ func TestDistributionSupportBoundaries(t *testing.T) {
 	}
 }
 
+func TestGammaLogPDFAtZero(t *testing.T) {
+	if got, want := (Gamma{Alpha: 1, Beta: 4}).LogPDF(0), -math.Log(4); math.Abs(got-want) > 1e-12 {
+		t.Errorf("Gamma(α=1) LogPDF(0) = %v, want %v", got, want)
+	}
+	if got := (Gamma{Alpha: 2, Beta: 4}).LogPDF(0); !math.IsInf(got, -1) {
+		t.Errorf("Gamma(α=2) LogPDF(0) = %v, want -Inf", got)
+	}
+	if got := (Gamma{Alpha: 0.5, Beta: 4}).LogPDF(0); !math.IsInf(got, 1) {
+		t.Errorf("Gamma(α=0.5) LogPDF(0) = %v, want +Inf", got)
+	}
+}
+
 func TestDistributionCDFProperties(t *testing.T) {
 	tests := []struct {
 		name string

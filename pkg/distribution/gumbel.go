@@ -52,11 +52,6 @@ func (f GumbelFitter) Name() string {
 	return "Gumbel"
 }
 
-// unboundedSupport: Gumbel-Verteilung hat Träger ℝ, negative Werte sind gültig.
-func (g Gumbel) unboundedSupport() bool {
-	return true
-}
-
 func (f GumbelFitter) Fit(data []float64) (ContinuousDistribution, error) {
 	cleaned := CleanDataWithZero(data)
 	n := len(cleaned)

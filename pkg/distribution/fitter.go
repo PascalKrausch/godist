@@ -2,13 +2,12 @@ package distribution
 
 import (
 	"errors"
-
 	"math"
 )
 
 // EvaluateFit berechnet alle Gütemetriken für eine beliebige ContinuousDistribution.
 func EvaluateFit(dist ContinuousDistribution, data []float64) (FitMetrics, error) {
-	cleaned := sampleFor(dist, data)
+	cleaned := CleanDataWithZero(data)
 	n := len(cleaned)
 	if n == 0 {
 		return FitMetrics{Converged: false}, ErrEmptyData
@@ -78,26 +77,13 @@ func EvaluateFit(dist ContinuousDistribution, data []float64) (FitMetrics, error
 	}, nil
 }
 
-// unboundedSupport markiert Verteilungen mit Träger ℝ, für die negative Werte gültig sind.
-type unboundedSupport interface {
-	unboundedSupport() bool
-}
-
 // freeParamCounter liefert die Anzahl der tatsächlich geschätzten Parameter (k für AIC/BIC),
 // falls diese von Params() abweicht.
 type freeParamCounter interface {
 	freeParamCount() int
 }
 
-// sampleFor bereinigt die Daten entsprechend dem Träger der Verteilung, damit Fit und Bewertung
-// dieselbe Stichprobe verwenden.
-func sampleFor(dist ContinuousDistribution, data []float64) []float64 {
-	if _, ok := dist.(unboundedSupport); ok {
-		return CleanDataWithZero(data)
-	}
-	return CleanData(data)
-}
-
+// freeParamCount nutzt freeParamCounter, falls implementiert, sonst len(Params()).
 func freeParamCount(dist ContinuousDistribution) int {
 	if c, ok := dist.(freeParamCounter); ok {
 		return c.freeParamCount()

@@ -11,18 +11,18 @@ import (
 
 func TestRegressionFixedDatasets(t *testing.T) {
 	tests := []struct {
-		name          string
-		data          []float64
-		fitter        Fitter
-		wantParams    []float64
-		wantMetrics   FitMetrics
-		paramTol      float64
-		metricsTol    float64
+		name        string
+		data        []float64
+		fitter      Fitter
+		wantParams  []float64
+		wantMetrics FitMetrics
+		paramTol    float64
+		metricsTol  float64
 	}{
 		{
-			name: "Exponential simple dataset",
-			data: []float64{1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0},
-			fitter: ExponentialFitter{},
+			name:       "Exponential simple dataset",
+			data:       []float64{1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0},
+			fitter:     ExponentialFitter{},
 			wantParams: []float64{0.181818}, // 1/mean, mean = 5.5
 			wantMetrics: FitMetrics{
 				SampleSize: 10,
@@ -32,9 +32,9 @@ func TestRegressionFixedDatasets(t *testing.T) {
 			metricsTol: 1e-6,
 		},
 		{
-			name: "Normal simple dataset",
-			data: []float64{1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0},
-			fitter: NormalFitter{},
+			name:       "Normal simple dataset",
+			data:       []float64{1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0},
+			fitter:     NormalFitter{},
 			wantParams: []float64{5.5, 2.8722813}, // mu, sigma (MLE: Divisor n)
 			wantMetrics: FitMetrics{
 				SampleSize: 10,
@@ -44,8 +44,8 @@ func TestRegressionFixedDatasets(t *testing.T) {
 			metricsTol: 1e-5,
 		},
 		{
-			name: "Gamma simple dataset",
-			data: []float64{1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0},
+			name:   "Gamma simple dataset",
+			data:   []float64{1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0},
 			fitter: GammaFitter{},
 			wantMetrics: FitMetrics{
 				SampleSize: 10,
@@ -55,8 +55,8 @@ func TestRegressionFixedDatasets(t *testing.T) {
 			metricsTol: 0.1,
 		},
 		{
-			name: "LogNormal simple dataset",
-			data: []float64{1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0},
+			name:   "LogNormal simple dataset",
+			data:   []float64{1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0},
 			fitter: LogNormalFitter{},
 			wantMetrics: FitMetrics{
 				SampleSize: 10,
@@ -66,8 +66,8 @@ func TestRegressionFixedDatasets(t *testing.T) {
 			metricsTol: 0.1,
 		},
 		{
-			name: "Weibull simple dataset",
-			data: []float64{1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0},
+			name:   "Weibull simple dataset",
+			data:   []float64{1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0},
 			fitter: WeibullFitter{},
 			wantMetrics: FitMetrics{
 				SampleSize: 10,
@@ -77,8 +77,8 @@ func TestRegressionFixedDatasets(t *testing.T) {
 			metricsTol: 0.1,
 		},
 		{
-			name: "Gumbel simple dataset",
-			data: []float64{1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0},
+			name:   "Gumbel simple dataset",
+			data:   []float64{1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0},
 			fitter: GumbelFitter{},
 			wantMetrics: FitMetrics{
 				SampleSize: 10,
@@ -88,8 +88,8 @@ func TestRegressionFixedDatasets(t *testing.T) {
 			metricsTol: 0.1,
 		},
 		{
-			name: "Beta bounded dataset",
-			data: []float64{0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9},
+			name:   "Beta bounded dataset",
+			data:   []float64{0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9},
 			fitter: BetaFitter{},
 			wantMetrics: FitMetrics{
 				SampleSize: 9,
@@ -248,9 +248,9 @@ func TestRegressionReproducibility(t *testing.T) {
 // im Modellvergleich korrekt gemeldet werden und nicht zum Absturz führen.
 func TestFailedFitsInModelComparison(t *testing.T) {
 	tests := []struct {
-		name            string
-		data            []float64
-		expectFailures  bool
+		name           string
+		data           []float64
+		expectFailures bool
 	}{
 		{
 			name:           "Valid data - no failures expected",

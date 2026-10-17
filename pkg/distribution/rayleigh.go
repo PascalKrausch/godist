@@ -53,17 +53,17 @@ func (f RayleighFitter) Name() string {
 }
 
 func (f RayleighFitter) Fit(data []float64) (ContinuousDistribution, error) {
-	cleaned := CleanData(data)
+	cleaned := CleanDataWithZero(data)
+	if err := checkNonNegative(cleaned); err != nil {
+		return nil, err
+	}
 	if len(cleaned) == 0 {
-		return nil, errors.New("zu wenige Datenpunkte für Rayleigh-Fit")
+		return nil, errors.New("zu wenige gültige Datenpunkte für Rayleigh-Fit")
 	}
 
 	// Schätzung auf den positiven Werten; Nullen werden wie bei Weibull/Gamma behandelt.
 	positive := make([]float64, 0, len(cleaned))
 	for _, x := range cleaned {
-		if x < 0 {
-			return nil, errors.New("rayleigh-verteilung erfordert nicht-negative werte (>= 0)")
-		}
 		if x > 0 {
 			positive = append(positive, x)
 		}

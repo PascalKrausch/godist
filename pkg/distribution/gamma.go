@@ -30,8 +30,19 @@ func (g Gamma) PDF(x float64) float64 {
 }
 
 func (g Gamma) LogPDF(x float64) float64 {
-	if x <= 0 || g.Alpha <= 0 || g.Beta <= 0 {
+	if x < 0 || g.Alpha <= 0 || g.Beta <= 0 {
 		return math.Inf(-1)
+	}
+	if x == 0 {
+		// Bei α < 1 ist die Dichte an 0 unendlich, bei α = 1 gilt f(0) = 1/θ, bei α > 1 ist sie 0.
+		switch {
+		case g.Alpha < 1:
+			return math.Inf(1)
+		case g.Alpha == 1:
+			return -math.Log(g.Beta)
+		default:
+			return math.Inf(-1)
+		}
 	}
 	lgamma, _ := math.Lgamma(g.Alpha)
 	return (g.Alpha-1)*math.Log(x) - (x / g.Beta) - (g.Alpha * math.Log(g.Beta)) - lgamma
@@ -53,7 +64,10 @@ func (f GammaFitter) Name() string {
 }
 
 func (f GammaFitter) Fit(data []float64) (ContinuousDistribution, error) {
-	cleaned := CleanData(data)
+	cleaned := CleanDataWithZero(data)
+	if err := checkNonNegative(cleaned); err != nil {
+		return nil, err
+	}
 	if len(cleaned) == 0 {
 		return nil, ErrEmptyData
 	}
