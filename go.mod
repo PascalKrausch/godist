@@ -1,4 +1,4 @@
-module godist
+module github.com/PascalKrausch/godist
 
 go 1.26
 

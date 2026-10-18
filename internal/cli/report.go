@@ -3,7 +3,8 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
-	"godist/pkg/distribution"
+
+	"github.com/PascalKrausch/godist/pkg/distribution"
 
 	"io"
 	"sort"
@@ -27,6 +28,7 @@ type FitReport struct {
 	Input            string                    `json:"input"`
 	Column           string                    `json:"column,omitempty"`
 	SampleSize       int                       `json:"sample_size"`
+	Discarded        int                       `json:"discarded"`
 	Candidates       int                       `json:"candidates"`
 	BestDistribution string                    `json:"best_distribution,omitempty"`
 	Models           []FitRow                  `json:"models"`
@@ -36,11 +38,13 @@ type FitReport struct {
 // Öffentliche Berichtsfunktionen
 
 // BuildFitReport erstellt einen Bericht aus erfolgreichen Fits und Fehlern.
-func BuildFitReport(results []distribution.FitResult, failures []distribution.FitFailure, input string, column string, sampleSize int) FitReport {
+// sampleSize ist die Anzahl verwendeter Werte, discarded die Anzahl verworfener Eingaben.
+func BuildFitReport(results []distribution.FitResult, failures []distribution.FitFailure, input string, column string, sampleSize int, discarded int) FitReport {
 	report := FitReport{
 		Input:      input,
 		Column:     column,
 		SampleSize: sampleSize,
+		Discarded:  discarded,
 		Models:     make([]FitRow, 0, len(results)),
 		Failures:   failures,
 	}
@@ -60,19 +64,18 @@ func BuildFitReport(results []distribution.FitResult, failures []distribution.Fi
 }
 
 // WriteTextReport schreibt den Bericht als lesbare Textausgabe.
+// Ohne erfolgreiches Modell werden nur die Fehlschläge ausgegeben; die Entscheidung über den Exit-Code trifft der Aufrufer.
 func WriteTextReport(w io.Writer, report FitReport) error {
 	report = prepareReport(report)
 
+	fmt.Fprintln(w, "GODIST — Distribution Analysis")
 	if len(report.Models) == 0 {
-		fmt.Fprintln(w, "GODIST — Distribution Analysis")
 		fmt.Fprintln(w, "Kein Modell konnte erfolgreich angepasst werden.")
 		for _, failure := range report.Failures {
 			fmt.Fprintf(w, "  %s: %s\n", failure.Name, failure.Error)
 		}
-		return fmt.Errorf("kein erfolgreicher Fit")
+		return nil
 	}
-
-	fmt.Fprintln(w, "GODIST — Distribution Analysis")
 	fmt.Fprintln(w)
 
 	if report.Input != "" {
@@ -85,7 +88,7 @@ func WriteTextReport(w io.Writer, report FitReport) error {
 	successful := len(report.Models)
 	failed := len(report.Failures)
 
-	fmt.Fprintf(w, "Observations: %d\n", report.SampleSize)
+	fmt.Fprintf(w, "Observations: %d%s\n", report.SampleSize, discardedSuffix(report.Discarded))
 	fmt.Fprintf(
 		w,
 		"Candidates:   %d (%d successful, %d failed)\n",
@@ -145,6 +148,19 @@ func WriteTextReport(w io.Writer, report FitReport) error {
 	return nil
 }
 
+// WriteSummary schreibt das Ergebnis des Einzelmodells (bestes Modell) als Zusammenfassung.
+func WriteSummary(w io.Writer, dist distribution.ContinuousDistribution, metrics distribution.FitMetrics, column string, sampleSize int, discarded int) {
+	fmt.Fprintln(w, "=== GODIST FITTER ERGEBNIS ===")
+	if column != "" {
+		fmt.Fprintf(w, "Spalte:         %s\n", column)
+	}
+	fmt.Fprintf(w, "Datenpunkte:    %d%s\n", sampleSize, discardedSuffix(discarded))
+	fmt.Fprintf(w, "Beste Kurve:    %s\n", getDistributionName(dist))
+	fmt.Fprintf(w, "Parameter:      %s\n", formatParams(paramsToMap(dist)))
+	fmt.Fprintf(w, "AIC / BIC:      %.2f / %.2f\n", metrics.AIC, metrics.BIC)
+	fmt.Fprintf(w, "KS-Statistik:   %.4f (RMSE: %.4f)\n", metrics.KSStatistic, metrics.RMSE)
+}
+
 // WriteJSONReport schreibt den Bericht als eingerücktes JSON.
 func WriteJSONReport(w io.Writer, report FitReport) error {
 	report = prepareReport(report)
@@ -158,7 +174,7 @@ func WriteJSONReport(w io.Writer, report FitReport) error {
 
 // prepareReport sortiert Modelle und berechnet Rangfolge sowie Delta-AIC.
 func prepareReport(report FitReport) FitReport {
-	report.Models = append([]FitRow(nil), report.Models...)
+	report.Models = append(make([]FitRow, 0, len(report.Models)), report.Models...)
 
 	sort.Slice(report.Models, func(i, j int) bool {
 		return report.Models[i].AIC < report.Models[j].AIC
@@ -179,6 +195,14 @@ func prepareReport(report FitReport) FitReport {
 	}
 
 	return report
+}
+
+// discardedSuffix hängt bei verworfenen Eingaben einen Hinweis an die Beobachtungszahl an.
+func discardedSuffix(discarded int) string {
+	if discarded == 0 {
+		return ""
+	}
+	return fmt.Sprintf(" (verworfen: %d)", discarded)
 }
 
 // formatParams formatiert Modellparameter in stabiler, sortierter Reihenfolge.

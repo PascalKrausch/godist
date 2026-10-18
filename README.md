@@ -5,7 +5,7 @@
 > **Projektstatus: noch nicht produktiv verwenden.**  
 > Vor einem produktiven Einsatz müssen insbesondere Parameterschätzung, numerische Stabilität, Gütemaße, Eingabevalidierung und Testabdeckung systematisch überprüft werden.
 >
-> **Aktueller Stand:** Neun Verteilungen sind implementiert. Die Unit-, Regressions- und Stabilitätstests in `pkg/distribution` laufen grün (`go test ./...`); `cmd/distfit` und `internal/cli` haben noch keine automatisierten Tests. Der CLI-Prototyp verarbeitet reale Datensätze (z. B. `winequality-red.csv`). Die Behandlung von Nullwerten folgt einer strikten Fast-Fail-Policy (siehe [Nullwerte](#nullwerte-fast-fail-policy)). Offene Punkte stehen unter [Bekannte Probleme](#bekannte-probleme-stand-aktueller-prototyp).
+> **Aktueller Stand:** Neun Verteilungen sind implementiert. Die Tests in `pkg/distribution`, `internal/cli` und `cmd/distfit` laufen grün (`go test ./...`). Der CLI-Prototyp verarbeitet reale Datensätze (z. B. `winequality-red.csv`). Die Behandlung von Nullwerten folgt einer strikten Fast-Fail-Policy (siehe [Nullwerte](#nullwerte-fast-fail-policy)). Offene Punkte stehen unter [Bekannte Probleme](#bekannte-probleme-stand-aktueller-prototyp).
 
 ## Ziele
 
@@ -112,11 +112,35 @@ Die Policy ist eine Zwischenlösung. Später kann ein **Zero-Inflated-Modell** (
 
 ## Aktueller CLI-Prototyp
 
-Der Prototyp liest Dateien und wählt standardmäßig das beste Modell nach AIC aus. Flags: `-file` (Pflicht), `-column` (Spaltenname oder 0-basierter Index bei CSV), `-all` (alle Kandidaten, inklusive fehlgeschlagener Fits) und `-format` (`text` oder `json`; nur zusammen mit `-all` wirksam).
+Der Prototyp liest Dateien und wählt standardmäßig das beste Modell nach AIC aus.
 
-Unterstützte Eingabeformate sind `.txt` (ein Wert pro Zeile), `.json` (Array von Zahlen) und `.csv` (Semikolon als Trennzeichen, Header in der ersten Zeile).
+| Flag | Bedeutung |
+|------|-----------|
+| `-file` | Pflicht. Endung `.csv`, `.json` oder `.txt` |
+| `-column` | Nur CSV: Spaltenname oder 0-basierter Index. Ohne Angabe muss genau eine numerische Spalte vorhanden sein |
+| `-decimal` | `.` (Standard) oder `,` für Dezimalkommas |
+| `-all` | Alle Kandidaten vergleichen, inklusive fehlgeschlagener Fits |
+| `-format` | `text` (Standard) oder `json`; `json` erfordert `-all` |
 
-Beispiele für die aktuelle flag-basierte Oberfläche:
+Unterstützte Eingabeformate sind `.txt` (ein Wert pro Zeile), `.json` (Array von Zahlen) und `.csv` (Semikolon als Trennzeichen; die erste Zeile gilt als Header, wenn sie keine Zahlen enthält).
+
+Verworfene Eingaben (leere Zellen, Text, `NaN`, `±Inf`, `null`) werden nicht stillschweigend übernommen: Die CLI meldet sie als Warnung auf stderr, und `Observations` bzw. `Datenpunkte` zeigt die Anzahl verworfener Werte. Im JSON-Bericht steht die Anzahl im Feld `discarded`.
+
+Exit-Codes: `0` Erfolg, `1` Daten- oder Fitting-Fehler (inklusive mehrdeutiger CSV ohne `-column` und zu kleiner oder konstanter Stichproben), `2` Aufruffehler (ungültige Flags).
+
+### Mindeststichprobe (Fast-Fail-Policy)
+
+Die CLI prüft die Stichprobengröße `n` vor dem Fit:
+
+| Bedingung | Verhalten |
+|-----------|-----------|
+| `n < 5` | Abbruch mit Fehlermeldung, Exit-Code `1` |
+| konstante Daten (alle Werte identisch) | Abbruch mit Fehlermeldung, Exit-Code `1` |
+| `5 ≤ n ≤ 20` | Fit läuft; Warnung auf stderr wegen hoher Parameterunsicherheit |
+| `n > 20` | Fit läuft ohne Warnung |
+
+Die Grenzen sind in `internal/cli/validate.go` als `MinSampleSize` (5) und `HighUncertaintySampleSize` (20) festgelegt. Die Schwellen sind eine vorläufige Entscheidung; die Warnung soll die Belastbarkeit der Parameter und des AIC-Rankings kennzeichnen.
+
 
 ```bash
 ./distfit -file=measurements.txt -all
@@ -128,7 +152,10 @@ Beispiele für die aktuelle flag-basierte Oberfläche:
 # Spalte nach Index auswählen (0-basiert)
 ./distfit -file=winequality-red.csv -column=10 -all
 
-# Ohne Spaltenauswahl (altes Verhalten: alle Zellen aller Spalten)
+# Dezimalkomma
+./distfit -file=messwerte.csv -column=2 -decimal=, -all -format=json
+
+# Ohne -column schlägt winequality-red.csv fehl (mehrere numerische Spalten)
 ./distfit -file=winequality-red.csv
 ```
 
@@ -151,9 +178,6 @@ Das Flag `-format=json` wird nur zusammen mit `-all` ausgewertet (siehe [Bekannt
 - **Beispiel `winequality-red.csv`, Spalte `citric acid`:** 132 von 1599 Zeilen sind `0`. In der aktuellen Ausgabe scheitern Weibull, LogNormal, Gamma und Rayleigh. Beta gewinnt mit AIC −1130.61 vor Exponential (−975.71).
 - **Vergleichbarkeit der Modelle:** Alle Kandidaten werten dieselbe Stichprobe aus. Bei negativen Werten scheiden die Positivträger-Modelle aus (`ErrNegativeValues`), sodass der Vergleich dann nur Normal, Gumbel, Laplace und Beta umfasst. Der Bericht zeigt die Stichprobengröße pro Modell nicht an.
 - **Beta-Fit:** `alpha` und `beta` werden per MLE (L-BFGS) bei festem Träger geschätzt. `min` und `max` sind keine geschätzten Parameter: Sind beide `0`, übernimmt der Fitter die Datenspanne mit 1 % Rand. Für AIC/BIC gilt daher `k = 2`. Bleibt der Optimierer stehen (`ErrNoProgress` / `ErrLinesearcherFailure`), wird der beste Punkt nur übernommen, wenn der Gradient pro Beobachtung unter `1e-6` liegt.
-- **Stille Verwerfung:** Nicht parsebare Zellen sowie `NaN` und `±Inf` werden in `.txt` sowie bei CSV mit und ohne Spaltenauswahl ohne Meldung übersprungen. Die Anzahl verworfener Werte wird nur im Einzelmodus ausgegeben (`Datenpunkte: n (verworfen: m)`), nicht im `-all`-Bericht.
-- **Format im Einzelmodus:** Ohne `-all` wird `-format=json` ignoriert.
-- **Spaltenauswahl:** Ohne `-column` werden bei CSV alle numerischen Zellen aller Spalten zu einem Datensatz vermischt. Das widerspricht dem Ziel unter Punkt 4 der nächsten Entwicklungsschritte.
 
 Die endgültige CLI-Oberfläche soll mit Unterbefehlen leichter auffindbar und erweiterbar werden. Die folgenden Befehle sind das Zielinterface; sie sind nicht zwingend bereits in jedem Build verfügbar.
 
