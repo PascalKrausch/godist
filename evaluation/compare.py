@@ -1,8 +1,10 @@
 
 import argparse
 import json
+import os
 import subprocess
 import sys
+import tempfile
 
 import numpy as np
 import pandas as pd
@@ -44,9 +46,22 @@ def load_data(path, column):
     return data, str(col)
 
 
-def run_go(path, column):
+def build_go_binary(target_dir):
+    """Kompiliert die CLI einmalig, damit Laufzeitmessungen keine Build-Zeit enthalten."""
+    binary = os.path.join(target_dir, "distfit")
+    proc = subprocess.run(
+        ["go", "build", "-o", binary, "./cmd/distfit"],
+        capture_output=True,
+        text=True,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(f"go build fehlgeschlagen:\n{proc.stderr}")
+    return binary
+
+
+def run_go(binary, path, column):
     cmd = [
-        "go", "run", "./cmd/distfit",
+        binary,
         "-file", path,
         "-column", column,
         "-all",
@@ -232,7 +247,8 @@ def main():
     args = parser.parse_args()
 
     data, col_name = load_data(args.path, args.column)
-    go_result = run_go(args.path, args.column)
+    with tempfile.TemporaryDirectory() as tmp:
+        go_result = run_go(build_go_binary(tmp), args.path, args.column)
 
     go_models = {
         model["name"]: model

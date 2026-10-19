@@ -42,6 +42,7 @@ Weibull ist eine Zweiparameter-Verteilung. Beim Beta-Fit werden nur `alpha` und 
 │   └── distfit/
 │       └── main.go           # CLI-Einstiegspunkt
 ├── evaluation/
+│   ├── bench.py              # Benchmarks godist vs. SciPy (Zeit, Speicher)
 │   └── compare.py            # Vergleich der Fits mit SciPy
 ├── internal/
 │   └── cli/
@@ -168,7 +169,21 @@ Zur Evaluation der Implementierungen wurde die Python-Bibliothek Scipy als Refer
 evaluation/.venv/bin/python evaluation/compare.py --path=testdata/winequality-red.csv --column=density
 ```
 
-Pfad und Spalte lassen sich anpassen. Im Virtualenv werden `scipy` und `pandas` benötigt.
+Pfad und Spalte lassen sich anpassen. Im Virtualenv werden `scipy` und `pandas` benötigt. Das Skript baut die CLI vorab einmal (`go build`), sodass die Build-Zeit nicht in den Vergleich einfließt.
+
+## Benchmarks: godist gegen SciPy
+
+`evaluation/bench.py run` misst drei Dinge und speichert die Ergebnisse unter `evaluation/bench_results/<Zeitstempel>/` (Verzeichnis ist nicht versioniert):
+
+```bash
+evaluation/.venv/bin/python evaluation/bench.py run --repeat 10
+```
+
+- **Reine Algorithmuszeit:** `go test -bench` (`go-bench.txt`, Auswertung mit `benchstat`) und `timeit`-Messungen in Python (`python-algo.json`). Gemessen wird nur der Fit bzw. `SelectAllModels`/`AllModels`, ohne Einlesen und Prozessstart.
+- **Speicher:** `B/op` und `allocs/op` aus `-benchmem` für Go, `tracemalloc`-Peak für Python (`python-mem.json`). Beide Werte sind nicht direkt vergleichbar: Go gibt die insgesamt allokierte Menge pro Operation an, Python den Spitzenwert. `tracemalloc` erfasst keinen Speicher, den SciPy-C-Code außerhalb des Python-Allokators belegt.
+- **Gesamtlaufzeit und Prozess-RSS:** Wandzeit und Peak-RSS der kompletten Prozesse (Einlesen, alle Modelle, Metriken) für Go-CLI und Python-Gegenstück (`e2e.json`). Der Python-Prozess enthält die Importkosten von numpy, pandas und scipy.
+
+Alle Messungen nutzen dieselben synthetischen Daten (100, 10.000 und 1.000.000 Werte, SplitMix64 mit Seed 42). `environment.json` hält Hardware, Versionen und Commit fest; `git_dirty` zeigt uncommittete Änderungen an. Vor einer Messung sollten Hintergrundlasten minimiert und das Gerät an der Steckdose betrieben werden.
 
 Das Flag `-format=json` wird nur zusammen mit `-all` ausgewertet (siehe [Bekannte Probleme](#bekannte-probleme-stand-aktueller-prototyp)).
 
@@ -252,6 +267,112 @@ godist fit measurements.csv --column wind_speed_10m --format json
 ```
 
 Bei JSON-Ausgabe gehört ausschließlich das JSON-Dokument auf `stdout`; Statusmeldungen und Fehler gehören auf `stderr`. So lässt sich die Ausgabe zuverlässig an andere Werkzeuge weiterleiten.
+
+# Beispiel JSON-Ausgabe 
+
+{
+     "input": "daten.csv",
+     "column": "density",
+     "sample_size": 1000,
+     "discarded": 5,
+     "candidates": 9,
+     "best_distribution": "Weibull",
+     "models": [
+       {
+         "name": "Weibull",
+         "params": {"k": 2.5, "lambda": 1.2},
+         "aic": 1234.5,
+         "delta_aic": 0.0,
+         "bic": 1240.2,
+         "ks_statistic": 0.0234,
+         "rmse": 0.0156
+       }
+     ],
+     "failures": []
+   }
+
+## Verwendung in anderen Projekten
+
+# Go
+
+type FitReport struct {
+       Input            string                    `json:"input"`
+       Column           string                    `json:"column,omitempty"`
+       SampleSize       int                       `json:"sample_size"`
+       Discarded        int                       `json:"discarded"`
+       Candidates       int                       `json:"candidates"`
+       BestDistribution string                    `json:"best_distribution,omitempty"`
+       Models           []FitRow                  `json:"models"`
+       Failures         []distribution.FitFailure `json:"failures,omitempty"`
+   }
+ 
+   var report FitReport
+   json.Unmarshal(output, &report)
+
+# Python
+
+from dataclasses import dataclass
+   from typing import Dict, List
+   import json
+ 
+   @dataclass
+   class FitRow:
+       name: str
+       params: Dict[str, float]
+       aic: float
+       delta_aic: float
+       bic: float
+       ks_statistic: float
+       rmse: float
+ 
+   @dataclass
+   class FitReport:
+       input: str
+       column: str
+       sample_size: int
+       discarded: int
+       candidates: int
+       best_distribution: str
+       models: List[FitRow]
+       failures: List[dict]
+ 
+   report = FitReport(**json.loads(result.stdout))
+ 
+   result = subprocess.run(
+       ["distfit", "-file=daten.csv", "-all", "-format=json"],
+       capture_output=True,
+       text=True
+   )
+   report = json.loads(result.stdout)
+
+   best_model = report["best_distribution"]
+   params = report["models"][0]["params"]
+   aic = report["models"][0]["aic"]
+
+# Type-Script
+
+interface FitRow {
+     name: string;
+     params: Record<string, number>;
+     aic: number;
+     delta_aic: number;
+     bic: number;
+     ks_statistic: number;
+     rmse: number;
+   }
+ 
+   interface FitReport {
+     input: string;
+     column?: string;
+     sample_size: number;
+     discarded: number;
+     candidates: number;
+     best_distribution?: string;
+     models: FitRow[];
+     failures?: any[];
+   }
+ 
+   const report: FitReport = JSON.parse(output);
 
 ## Auswahlkriterium und Gütemaße
 
@@ -365,7 +486,7 @@ Performanceoptimierungen sollen auf Benchmarks beruhen und erst nach der fachlic
 # Tests
 go test ./...
 
-# Benchmarks inklusive Allokationszahlen (derzeit sind noch keine Benchmark-Funktionen vorhanden)
+# Benchmarks inklusive Allokationszahlen (Fitter einzeln und SelectAllModels)
 go test -bench=. -benchmem ./...
 
 # CLI bauen
