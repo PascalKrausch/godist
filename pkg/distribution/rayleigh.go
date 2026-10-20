@@ -61,25 +61,22 @@ func (f RayleighFitter) Fit(data []float64) (ContinuousDistribution, error) {
 		return nil, errors.New("zu wenige gültige Datenpunkte für Rayleigh-Fit")
 	}
 
-	// Schätzung auf den positiven Werten; Nullen werden wie bei Weibull/Gamma behandelt.
-	positive := make([]float64, 0, len(cleaned))
+	// Strenge Nullwert-Policy (Fast-Fail): Die Rayleigh-Dichte ist an 0 gleich 0, daher ist jede Null
+	// mit dem Modell unvereinbar.
 	for _, x := range cleaned {
-		if x > 0 {
-			positive = append(positive, x)
+		if x == 0 {
+			return nil, ErrFitFailed
 		}
-	}
-	if len(positive) == 0 {
-		return nil, ErrFitFailed
 	}
 
 	sumSquares := 0.0
-	for _, x := range positive {
+	for _, x := range cleaned {
 		sumSquares += x * x
 	}
 
 	// Exakte analytische MLE-Formel für Rayleigh:
 	// σ = sqrt( (1 / 2N) * sum(x_i^2) )
-	n := float64(len(positive))
+	n := float64(len(cleaned))
 	scale := math.Sqrt(sumSquares / (2.0 * n))
 
 	if scale <= 0 || !IsFinite(scale) {

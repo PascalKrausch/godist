@@ -10,7 +10,21 @@ import (
 )
 
 // CleanDataWithZero entfernt nur NaN und Inf, behält aber Nullwerte und negative Werte.
+// Wenn keine Werte gefiltert werden müssen, wird das Original-Array zurückgegeben (zero-allocation im common case).
 func CleanDataWithZero(data []float64) []float64 {
+	// Prüfe zuerst, ob überhaupt gefiltert werden muss
+	hasInvalid := false
+	for _, v := range data {
+		if math.IsNaN(v) || math.IsInf(v, 0) {
+			hasInvalid = true
+			break
+		}
+	}
+	if !hasInvalid {
+		return data
+	}
+
+	// Filter-Phase nur wenn nötig
 	out := make([]float64, 0, len(data))
 	for _, v := range data {
 		if math.IsNaN(v) || math.IsInf(v, 0) {

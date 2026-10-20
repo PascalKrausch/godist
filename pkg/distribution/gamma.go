@@ -72,22 +72,18 @@ func (f GammaFitter) Fit(data []float64) (ContinuousDistribution, error) {
 		return nil, ErrEmptyData
 	}
 
-	// Schätzung auf den positiven Werten; Nullen werden unten gegen den Formparameter geprüft.
-	positive := make([]float64, 0, len(cleaned))
+	// Strenge Nullwert-Policy (Fast-Fail): Nullen werden nicht entfernt. Für α ≠ 1 ist die Dichte an 0
+	// 0 oder ∞; α = 1 entspricht der Exponentialverteilung.
 	for _, x := range cleaned {
-		if x > 0 {
-			positive = append(positive, x)
+		if x == 0 {
+			return nil, ErrFitFailed
 		}
 	}
-	hasZeros := len(positive) < len(cleaned)
-	if len(positive) == 0 {
-		return nil, ErrFitFailed
-	}
 
-	n := float64(len(positive))
+	n := float64(len(cleaned))
 	sum := 0.0
 	sumLog := 0.0
-	for _, x := range positive {
+	for _, x := range cleaned {
 		sum += x
 		sumLog += math.Log(x)
 	}
@@ -105,11 +101,6 @@ func (f GammaFitter) Fit(data []float64) (ContinuousDistribution, error) {
 
 	// Newton-Raphson Verfeinerung für Alpha (optional, erhöht Genauigkeit)
 	alpha = refineGammaAlpha(alpha, s)
-
-	// Strenge Nullwert-Policy (Fast-Fail): Bei α < 1 ist die Dichte an 0 unendlich.
-	if hasZeros && alpha < 1 {
-		return nil, ErrFitFailed
-	}
 
 	beta := mean / alpha // Scale Parameter θ = E[X] / α
 

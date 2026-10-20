@@ -1,5 +1,10 @@
 evaluation/.venv/
 evaluation/__pycache__/
 /distfit
+/distribution.test
+/escape.txt
+/mem.out
+docs/roadmap.md
+
 
 evaluation/bench_results/

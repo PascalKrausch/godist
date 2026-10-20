@@ -84,3 +84,44 @@ func BenchmarkSelectAllModels(b *testing.B) {
 		})
 	}
 }
+
+// selectAllModelsSequential ist die sequenzielle Referenzimplementierung für den Crossover-Benchmark.
+func selectAllModelsSequential(data []float64) ([]FitResult, []FitFailure, error) {
+	fitters := []Fitter{
+		WeibullFitter{}, LogNormalFitter{}, GammaFitter{}, NormalFitter{}, BetaFitter{},
+		ExponentialFitter{}, GumbelFitter{}, RayleighFitter{}, LaplaceFitter{},
+	}
+	var results []FitResult
+	var failures []FitFailure
+	for _, fitter := range fitters {
+		o := fitOne(fitter, data)
+		if o.failure != nil {
+			failures = append(failures, *o.failure)
+		} else {
+			results = append(results, o.result)
+		}
+	}
+	return results, failures, nil
+}
+
+// BenchmarkCrossover vergleicht sequenziell und parallel über Stichprobengrößen, um den Schwellenwert zu finden.
+func BenchmarkCrossover(b *testing.B) {
+	sizes := []int{10, 20, 30, 50, 100, 200, 500, 1_000, 5_000, 10_000, 50_000, 100_000, 500_000, 1_000_000}
+	for _, n := range sizes {
+		data := benchData(n)
+		b.Run(fmt.Sprintf("seq/n=%d", n), func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				if _, _, err := selectAllModelsSequential(data); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+		b.Run(fmt.Sprintf("par/n=%d", n), func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				if _, _, err := SelectAllModels(data); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
+}

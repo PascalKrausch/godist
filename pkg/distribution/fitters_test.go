@@ -157,3 +157,82 @@ func TestRayleighFitterClosedForm(t *testing.T) {
 	}
 	assertNear(t, "Scale", got.Scale, math.Sqrt2)
 }
+
+// weibullShapeBisection ist die Referenz-Bisektion für den Shape-MLE (vor der Newton-Umstellung).
+func weibullShapeBisection(logs []float64) float64 {
+	meanLog := 0.0
+	for _, l := range logs {
+		meanLog += l
+	}
+	meanLog /= float64(len(logs))
+	maxLog := logs[0]
+	for _, l := range logs[1:] {
+		maxLog = math.Max(maxLog, l)
+	}
+	g := func(k float64) float64 {
+		s0, s1 := 0.0, 0.0
+		for _, l := range logs {
+			w := math.Exp(k * (l - maxLog))
+			s0 += w
+			s1 += w * l
+		}
+		return s1/s0 - meanLog - 1/k
+	}
+	lo, hi := 1e-3, 1e3
+	for hi-lo > 1e-14*hi {
+		mid := 0.5 * (lo + hi)
+		if g(mid) < 0 {
+			lo = mid
+		} else {
+			hi = mid
+		}
+	}
+	return 0.5 * (lo + hi)
+}
+
+func TestWeibullNewtonMatchesBisection(t *testing.T) {
+	for _, shape := range []float64{0.3, 0.8, 1.0, 1.7, 3.5, 12} {
+		for seed := uint64(1); seed <= 5; seed++ {
+			data := make([]float64, 2000)
+			state := seed * 0x9E3779B97F4A7C15
+			for i := range data {
+				state += 0x9E3779B97F4A7C15
+				z := state
+				z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9
+				z = (z ^ (z >> 27)) * 0x94D049BB133111EB
+				z ^= z >> 31
+				u := (float64(z>>11) + 0.5) / (1 << 53)
+				data[i] = math.Pow(-math.Log(u), 1/shape)
+			}
+			logs := make([]float64, len(data))
+			for i, x := range data {
+				logs[i] = math.Log(x)
+			}
+			got, ok := solveWeibullShape(logs)
+			if !ok {
+				t.Fatalf("shape=%g seed=%d: solveWeibullShape failed", shape, seed)
+			}
+			want := weibullShapeBisection(logs)
+			if math.Abs(got-want) > 1e-9*want {
+				t.Errorf("shape=%g seed=%d: newton=%.15g bisection=%.15g", shape, seed, got, want)
+			}
+		}
+	}
+}
+
+func TestWeibullSolverRejectsDegenerateData(t *testing.T) {
+	logs := []float64{1, 1, 1, 1}
+	if _, ok := solveWeibullShape(logs); ok {
+		t.Fatal("solveWeibullShape accepted constant data, want failure")
+	}
+}
+
+func TestPositiveSupportFittersRejectZeros(t *testing.T) {
+	withZero := []float64{0, 0.5, 1.2, 2.3, 3.1, 4.8, 0.9, 1.7}
+	fitters := []Fitter{WeibullFitter{}, GammaFitter{}, RayleighFitter{}, LogNormalFitter{}}
+	for _, f := range fitters {
+		if _, err := f.Fit(withZero); err == nil {
+			t.Errorf("%s.Fit() accepted data containing 0, want failure", f.Name())
+		}
+	}
+}

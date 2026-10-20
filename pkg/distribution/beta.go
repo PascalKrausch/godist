@@ -101,46 +101,64 @@ func (f BetaFitter) Fit(data []float64) (ContinuousDistribution, error) {
 
 	// Grenzen automatisch bestimmen, falls nicht vorgegeben
 	if minVal == 0 && maxVal == 0 {
-		summary := Summarize(cleaned)
-		margin := 0.01 * (summary.Max - summary.Min)
+		// Berechne Min/Max direkt ohne Summarize (spart 1 Allokation)
+		dataMin := cleaned[0]
+		dataMax := cleaned[0]
+		for _, v := range cleaned {
+			if v < dataMin {
+				dataMin = v
+			}
+			if v > dataMax {
+				dataMax = v
+			}
+		}
+		margin := 0.01 * (dataMax - dataMin)
 		if margin == 0 {
 			margin = 0.001
 		}
-		minVal = summary.Min - margin
-		maxVal = summary.Max + margin
+		minVal = dataMin - margin
+		maxVal = dataMax + margin
 	}
 
-	// Daten auf [0, 1] skalieren
+	// Daten auf [0, 1] skalieren und Log-Summen für MLE berechnen
 	rangeVal := maxVal - minVal
-	scaled := make([]float64, len(cleaned))
-	for i, x := range cleaned {
+	var sumLogY, sumLog1mY float64
+	for _, x := range cleaned {
 		if x <= minVal || x >= maxVal {
 			return nil, errors.New("datenpunkte liegen außerhalb der angegebenen Min/Max-Grenzen")
 		}
-		scaled[i] = (x - minVal) / rangeVal
+		y := (x - minVal) / rangeVal
+		sumLogY += math.Log(y)
+		sumLog1mY += math.Log1p(-y)
 	}
 
 	// Momentenmethode im skalierten Raum [0, 1]
-	mean := stat.Mean(scaled, nil)
-	variance := stat.Variance(scaled, nil)
+	mean := stat.Mean(cleaned, nil)
+	variance := stat.Variance(cleaned, nil)
 
-	if variance >= mean*(1.0-mean) || variance <= 0 {
+	// Transformiere mean und variance von [minVal, maxVal] nach [0, 1]
+	scaledMean := (mean - minVal) / rangeVal
+	scaledVariance := variance / (rangeVal * rangeVal)
+
+	if scaledVariance >= scaledMean*(1.0-scaledMean) || scaledVariance <= 0 {
 		return nil, errors.New("datenvarianz ist zu hoch/ungültig für Beta-Verteilung")
 	}
 
 	// Schätzung für α und β
-	commonFactor := (mean * (1.0 - mean) / variance) - 1.0
-	alpha := mean * commonFactor
-	betaParam := (1.0 - mean) * commonFactor
+	commonFactor := (scaledMean * (1.0 - scaledMean) / scaledVariance) - 1.0
+	alpha := scaledMean * commonFactor
+	betaParam := (1.0 - scaledMean) * commonFactor
 
 	if alpha <= 0 || betaParam <= 0 || !IsFinite(alpha) || !IsFinite(betaParam) {
 		return nil, errors.New("beta-parameter konnte nicht geschätzt werden")
 	}
 
 	alphaMLE, betaMLE, err := fitBetaMLE(
-		scaled,
+		sumLogY,
+		sumLog1mY,
 		alpha,
 		betaParam,
+		len(cleaned),
 	)
 	if err != nil {
 		return nil, err
@@ -155,10 +173,11 @@ func (f BetaFitter) Fit(data []float64) (ContinuousDistribution, error) {
 }
 
 func fitBetaMLE(
-	scaled []float64,
+	sumLogY, sumLog1mY float64,
 	alpha0, beta0 float64,
+	dataLen int,
 ) (float64, float64, error) {
-	if len(scaled) < 2 {
+	if dataLen < 2 {
 		return 0, 0, errors.New(
 			"zu wenige Datenpunkte für Beta-MLE",
 		)
@@ -172,22 +191,7 @@ func fitBetaMLE(
 		)
 	}
 
-	// Die Beta-Log-Likelihood benötigt Werte strikt in (0, 1).
-	var sumLogY, sumLog1mY float64
-
-	for i, y := range scaled {
-		if !(y > 0 && y < 1) {
-			return 0, 0, fmt.Errorf(
-				"Beta-MLE: skalierter Datenpunkt %d liegt nicht in (0, 1): %g",
-				i, y,
-			)
-		}
-
-		sumLogY += math.Log(y)
-		sumLog1mY += math.Log1p(-y)
-	}
-
-	n := float64(len(scaled))
+	n := float64(dataLen)
 
 	isFinite := func(v float64) bool {
 		return !math.IsNaN(v) && !math.IsInf(v, 0)
@@ -237,7 +241,8 @@ func fitBetaMLE(
 
 			if f < bestF {
 				bestF = f
-				bestZ = []float64{z[0], z[1]}
+				bestZ[0] = z[0]
+				bestZ[1] = z[1]
 			}
 
 			return f
@@ -289,14 +294,14 @@ func fitBetaMLE(
 		GradEvaluations:   10000,
 	}
 
-	initial := []float64{
+	initial := [2]float64{
 		math.Log(alpha0),
 		math.Log(beta0),
 	}
 
 	result, err := optimize.Minimize(
 		problem,
-		initial,
+		initial[:],
 		settings,
 		&optimize.LBFGS{},
 	)
@@ -315,8 +320,8 @@ func fitBetaMLE(
 			)
 		}
 
-		grad := make([]float64, 2)
-		problem.Grad(grad, bestZ)
+		var grad [2]float64
+		problem.Grad(grad[:], bestZ)
 		maxGrad := math.Max(math.Abs(grad[0]), math.Abs(grad[1]))
 		if !isFinite(maxGrad) || maxGrad/n > 1e-6 {
 			return 0, 0, fmt.Errorf(

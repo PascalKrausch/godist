@@ -3,6 +3,7 @@ package distribution
 import (
 	"errors"
 	"math"
+	"sync"
 )
 
 // EvaluateFit berechnet alle Gütemetriken für eine beliebige ContinuousDistribution.
@@ -126,33 +127,48 @@ func SelectAllModels(data []float64) ([]FitResult, []FitFailure, error) {
 		LaplaceFitter{},
 	}
 
+	// Jede Verteilung läuft in einer eigenen Goroutine; Slots pro Index halten die Reihenfolge von fitters bei.
+	outcomes := make([]fitOutcome, len(fitters))
+	var wg sync.WaitGroup
+	for i, fitter := range fitters {
+		wg.Add(1)
+		go func(i int, fitter Fitter) {
+			defer wg.Done()
+			outcomes[i] = fitOne(fitter, data)
+		}(i, fitter)
+	}
+	wg.Wait()
+
 	var results []FitResult
 	var failures []FitFailure
-
-	for _, fitter := range fitters {
-		dist, err := fitter.Fit(data)
-		if err != nil {
-			failures = append(failures, FitFailure{
-				Name:  fitter.Name(),
-				Error: err.Error(),
-			})
-			continue
+	for _, o := range outcomes {
+		if o.failure != nil {
+			failures = append(failures, *o.failure)
+		} else {
+			results = append(results, o.result)
 		}
-
-		metrics, err := EvaluateFit(dist, data)
-		if err != nil {
-			failures = append(failures, FitFailure{
-				Name:  fitter.Name(),
-				Error: err.Error(),
-			})
-			continue
-		}
-
-		results = append(results, FitResult{
-			Dist:    dist,
-			Metrics: metrics,
-		})
 	}
 
 	return results, failures, nil
+}
+
+// fitOutcome ist das Ergebnis eines einzelnen Fitters: entweder Result oder Failure.
+type fitOutcome struct {
+	result  FitResult
+	failure *FitFailure
+}
+
+// fitOne fittet eine Verteilung und bewertet sie mit EvaluateFit.
+func fitOne(fitter Fitter, data []float64) fitOutcome {
+	dist, err := fitter.Fit(data)
+	if err != nil {
+		return fitOutcome{failure: &FitFailure{Name: fitter.Name(), Error: err.Error()}}
+	}
+
+	metrics, err := EvaluateFit(dist, data)
+	if err != nil {
+		return fitOutcome{failure: &FitFailure{Name: fitter.Name(), Error: err.Error()}}
+	}
+
+	return fitOutcome{result: FitResult{Dist: dist, Metrics: metrics}}
 }

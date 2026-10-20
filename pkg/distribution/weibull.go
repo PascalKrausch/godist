@@ -70,31 +70,22 @@ func (f WeibullFitter) Fit(data []float64) (ContinuousDistribution, error) {
 		return nil, ErrEmptyData
 	}
 
-	// Schätzung auf den positiven Werten; Nullen werden unten gegen den Formparameter geprüft.
-	positive := make([]float64, 0, len(cleaned))
+	// Strenge Nullwert-Policy (Fast-Fail): Nullen werden nicht entfernt. Für Shape ≠ 1 ist die Dichte an 0
+	// 0 oder ∞; Shape = 1 entspricht der Exponentialverteilung.
 	for _, x := range cleaned {
-		if x > 0 {
-			positive = append(positive, x)
+		if x == 0 {
+			return nil, ErrFitFailed
 		}
-	}
-	hasZeros := len(positive) < len(cleaned)
-	if len(positive) == 0 {
-		return nil, ErrFitFailed
 	}
 
 	// Transformation: Logarithmiere die Daten für MLE
-	logs := make([]float64, len(positive))
-	for i, x := range positive {
+	logs := make([]float64, len(cleaned))
+	for i, x := range cleaned {
 		logs[i] = math.Log(x)
 	}
 
 	shape, ok := solveWeibullShape(logs)
 	if !ok {
-		return nil, ErrFitFailed
-	}
-
-	// Strenge Nullwert-Policy (Fast-Fail): Bei Formparameter < 1 ist die Dichte an 0 unendlich.
-	if hasZeros && shape < 1 {
 		return nil, ErrFitFailed
 	}
 
@@ -111,8 +102,9 @@ func (f WeibullFitter) Fit(data []float64) (ContinuousDistribution, error) {
 //
 //	g(k) = Σ xᵢᵏ ln xᵢ / Σ xᵢᵏ − mean(ln x) − 1/k
 //
-// g ist streng monoton steigend in k, daher ist die Bisektion auf einem Intervall
-// mit Vorzeichenwechsel global konvergent (anders als eine Fixpunktiteration).
+// g ist streng monoton steigend in k (g'(k) = Var_w(ln x) + 1/k² > 0), die Nullstelle ist also eindeutig.
+// Newton-Raphson konvergiert quadratisch, bleibt aber im Klammerintervall mit Vorzeichenwechsel:
+// verlässt ein Schritt das Intervall, wird bisektiert. So bleibt die globale Konvergenz der Bisektion erhalten.
 func solveWeibullShape(logs []float64) (float64, bool) {
 	meanLog := stat.Mean(logs, nil)
 	maxLog := logs[0]
@@ -122,37 +114,61 @@ func solveWeibullShape(logs []float64) (float64, bool) {
 		}
 	}
 
-	g := func(k float64) float64 {
-		sumPow := 0.0
-		sumPowLog := 0.0
+	// g(k) und g'(k) in einem Durchlauf; Skalierung mit maxLog kürzt sich in den Quotienten heraus.
+	eval := func(k float64) (float64, float64) {
+		var s0, s1, s2 float64
 		for _, l := range logs {
 			w := math.Exp(k * (l - maxLog))
-			sumPow += w
-			sumPowLog += w * l
+			s0 += w
+			s1 += w * l
+			s2 += w * l * l
 		}
-		return sumPowLog/sumPow - meanLog - 1.0/k
+		m1 := s1 / s0
+		return m1 - meanLog - 1.0/k, s2/s0 - m1*m1 + 1.0/(k*k)
 	}
 
 	lo, hi := 1e-3, 1e3
-	gLo, gHi := g(lo), g(hi)
+	gLo, _ := eval(lo)
+	gHi, _ := eval(hi)
 	if !IsFinite(gLo) || !IsFinite(gHi) || gLo > 0 || gHi < 0 {
 		return 0, false
 	}
 
-	for iter := 0; iter < 200 && hi-lo > 1e-12*hi; iter++ {
-		mid := 0.5 * (lo + hi)
-		gMid := g(mid)
-		if gMid == 0 {
-			return mid, true
-		}
-		if gMid < 0 {
-			lo = mid
-		} else {
-			hi = mid
-		}
+	// Startwert: Momentenschätzung über die Standardabweichung der logarithmierten Daten (Gumbel-Näherung).
+	variance := 0.0
+	for _, l := range logs {
+		variance += (l - meanLog) * (l - meanLog)
+	}
+	std := math.Sqrt(variance / float64(len(logs)))
+	k := lo
+	if std > 0 {
+		k = 1.2825 / std
+	}
+	if !(k > lo && k < hi) {
+		k = 0.5 * (lo + hi)
 	}
 
-	k := 0.5 * (lo + hi)
+	for iter := 0; iter < 200; iter++ {
+		gk, dgk := eval(k)
+		if gk == 0 {
+			return k, true
+		}
+		if gk < 0 {
+			lo = k
+		} else {
+			hi = k
+		}
+
+		next := k - gk/dgk
+		if !(next > lo && next < hi) {
+			next = 0.5 * (lo + hi)
+		}
+		if math.Abs(next-k) <= 1e-12*math.Abs(next) {
+			return next, IsFinite(next) && next > 0
+		}
+		k = next
+	}
+
 	return k, IsFinite(k) && k > 0
 }
 
