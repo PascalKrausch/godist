@@ -10,6 +10,13 @@ type Rayleigh struct {
 	Scale float64 // σ > 0
 }
 
+func (r Rayleigh) Quantile(p float64) float64 {
+	if r.Scale <= 0 || !validProbability(p) {
+		return math.NaN()
+	}
+	return r.Scale * math.Sqrt(-2*math.Log1p(-p))
+}
+
 func (r Rayleigh) Params() []float64 {
 	return []float64{r.Scale}
 }

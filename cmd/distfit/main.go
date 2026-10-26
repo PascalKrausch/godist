@@ -1,15 +1,18 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
 
 	"github.com/PascalKrausch/godist/internal/cli"
+	"github.com/PascalKrausch/godist/internal/plotserver"
 	"github.com/PascalKrausch/godist/pkg/distribution"
 )
 
@@ -33,7 +36,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	filePath := fs.String("file", "", "Pfad zur Datei (.csv, .json, .txt)")
 	column := fs.String("column", "", "CSV: Spaltenname oder 0-basierter Index (ohne Angabe: einzige numerische Spalte)")
 	allModels := fs.Bool("all", false, "Alle Modelle vergleichen statt nur das beste anzuzeigen")
-	format := fs.String("format", "text", "Ausgabeformat: text oder json (json erfordert -all)")
+	format := fs.String("format", "text", "Ausgabeformat: text, json oder plot (json und plot erfordern -all)")
 	decimal := fs.String("decimal", ".", "Dezimaltrennzeichen: . oder ,")
 
 	if err := fs.Parse(args); err != nil {
@@ -86,11 +89,14 @@ func validateFlags(fs *flag.FlagSet, filePath, column, format, decimal string, a
 	if column != "" && strings.ToLower(filepath.Ext(filePath)) != ".csv" {
 		return errors.New("-column wird nur für CSV-Dateien unterstützt")
 	}
-	if format != "text" && format != "json" {
-		return fmt.Errorf("ungültiges -format %q (erlaubt: text, json)", format)
-	}
-	if format == "json" && !allModels {
-		return errors.New("-format=json erfordert -all")
+	switch format {
+	case "text":
+	case "json", "plot":
+		if !allModels {
+			return fmt.Errorf("-format=%s erfordert -all", format)
+		}
+	default:
+		return fmt.Errorf("ungültiges -format %q (erlaubt: text, json, plot)", format)
 	}
 	if decimal != "." && decimal != "," {
 		return fmt.Errorf("ungültiges -decimal %q (erlaubt: . oder ,)", decimal)
@@ -104,6 +110,10 @@ func runAll(stdout, stderr io.Writer, ds cli.Dataset, filePath, format string) i
 	if err != nil {
 		fmt.Fprintf(stderr, "Fehler: Fitting fehlgeschlagen: %v\n", err)
 		return exitFailure
+	}
+
+	if format == "plot" {
+		return runPlot(stderr, ds.Values, results)
 	}
 
 	report := cli.BuildFitReport(results, failures, filePath, ds.Column, len(ds.Values), len(ds.Discarded))
@@ -120,6 +130,30 @@ func runAll(stdout, stderr io.Writer, ds cli.Dataset, filePath, format string) i
 
 	if len(results) == 0 {
 		fmt.Fprintln(stderr, "Fehler: Kein Modell konnte angepasst werden.")
+		return exitFailure
+	}
+	return exitOK
+}
+
+// runPlot startet das interaktive Dashboard, öffnet den Browser und blockiert bis Strg+C.
+func runPlot(stderr io.Writer, values []float64, results []distribution.FitResult) int {
+	if len(results) == 0 {
+		fmt.Fprintln(stderr, "Fehler: Kein Modell konnte angepasst werden.")
+		return exitFailure
+	}
+
+	source := cli.BuildPlotSource(values, results)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
+
+	err := plotserver.Serve(ctx, source, func(url string) {
+		fmt.Fprintf(stderr, "Dashboard: %s\nBeenden mit Strg+C.\n", url)
+		if err := cli.OpenBrowser(url); err != nil {
+			fmt.Fprintf(stderr, "Warnung: Browser konnte nicht geöffnet werden: %v\n", err)
+		}
+	})
+	if err != nil {
+		fmt.Fprintf(stderr, "Fehler: Dashboard fehlgeschlagen: %v\n", err)
 		return exitFailure
 	}
 	return exitOK
@@ -148,6 +182,7 @@ func writeUsage(w io.Writer, fs *flag.FlagSet) {
 	fmt.Fprintln(w, "  distfit -file=werte.txt")
 	fmt.Fprintln(w, "  distfit -file=daten.csv -column=density -all")
 	fmt.Fprintln(w, "  distfit -file=daten.csv -column=2 -decimal=, -all -format=json")
+	fmt.Fprintln(w, "  distfit -file=werte.txt -all -format=plot")
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Exit-Codes: 0 Erfolg, 1 Daten- oder Fitting-Fehler, 2 Aufruf-Fehler")
 }

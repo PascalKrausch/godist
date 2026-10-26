@@ -131,6 +131,7 @@ go build -o distfit ./cmd/distfit
 # Alle Kandidaten vergleichen (Text oder JSON)
 ./distfit -file=measurements.txt -all
 ./distfit -file=measurements.txt -all -format=json
+./distfit -file=measurements.txt -all -format=plot
 
 # Tests und Benchmarks
 go test ./...

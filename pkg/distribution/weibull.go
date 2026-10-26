@@ -13,6 +13,13 @@ type Weibull struct {
 	Scale float64 // Skalenparameter (λ > 0)
 }
 
+func (w Weibull) Quantile(p float64) float64 {
+	if w.Shape <= 0 || w.Scale <= 0 || !validProbability(p) {
+		return math.NaN()
+	}
+	return w.Scale * math.Pow(-math.Log1p(-p), 1/w.Shape)
+}
+
 func (w Weibull) Params() []float64 {
 	return []float64{w.Shape, w.Scale}
 }

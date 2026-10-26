@@ -12,9 +12,13 @@ Der Prototyp liest Dateien und wählt standardmäßig das beste Modell nach AIC 
 | `-column` | Nur CSV: Spaltenname oder 0-basierter Index. Ohne Angabe muss genau eine numerische Spalte vorhanden sein |
 | `-decimal` | `.` (Standard) oder `,` für Dezimalkommas |
 | `-all` | Alle Kandidaten vergleichen, inklusive fehlgeschlagener Fits |
-| `-format` | `text` (Standard) oder `json`; `json` erfordert `-all` |
+| `-format` | `text` (Standard), `json` oder `plot`; `json` und `plot` erfordern `-all` |
 
 Unterstützte Eingabeformate sind `.txt` (ein Wert pro Zeile), `.json` (Array von Zahlen) und `.csv` (Semikolon als Trennzeichen; die erste Zeile gilt als Header, wenn sie keine Zahlen enthält).
+
+`-format=plot` startet ein interaktives Dashboard auf `127.0.0.1` mit einem freien Port, öffnet es im Standardbrowser und läuft bis `Strg+C`. Es zeigt Histogramm, Dichte, empirische und theoretische CDF sowie Q-Q-Plots für alle angepassten Modelle. Die URL wird auf stderr ausgegeben, stdout bleibt leer. Anfragen mit einem anderen Host-Header als `127.0.0.1` oder `localhost` werden abgelehnt.
+
+Im Dashboard lassen sich über Checkboxen einzelne Modelle ein- und ausblenden (in PDF, CDF und Q-Q-Plots). Das Feld „Klassen“ setzt die Anzahl der Histogrammklassen von 1 bis 500; „Automatisch“ stellt die Freedman-Diaconis-Wahl wieder her. Die Daten werden dafür über `GET /api/plot?bins=N` neu berechnet.
 
 Verworfene Eingaben (leere Zellen, Text, `NaN`, `±Inf`, `null`) werden nicht stillschweigend übernommen: Die CLI meldet sie als Warnung auf stderr, und `Observations` bzw. `Datenpunkte` zeigt die Anzahl verworfener Werte. Im JSON-Bericht steht die Anzahl im Feld `discarded`.
 
@@ -25,6 +29,7 @@ Exit-Codes: `0` Erfolg, `1` Daten- oder Fitting-Fehler (inklusive mehrdeutiger C
 ```bash
 ./distfit -file=measurements.txt -all
 ./distfit -file=measurements.txt -all -format=json
+./distfit -file=measurements.txt -all -format=plot
 
 # Spalte nach Name auswählen
 ./distfit -file=winequality-red.csv -column="alcohol" -all

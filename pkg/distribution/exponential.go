@@ -12,6 +12,13 @@ type Exponential struct {
 	Lambda float64 // Rate-Parameter (λ > 0), Kehrwert des Mittelwerts
 }
 
+func (e Exponential) Quantile(p float64) float64 {
+	if e.Lambda <= 0 || !validProbability(p) {
+		return math.NaN()
+	}
+	return -math.Log1p(-p) / e.Lambda
+}
+
 func (e Exponential) Params() []float64 {
 	return []float64{e.Lambda}
 }

@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>godist · Fit Explorer</title>
+  <link rel="stylesheet" href="/uPlot.min.css">
+  <link rel="stylesheet" href="/style.css">
+  <script defer src="/uPlot.iife.min.js"></script>
+  <script defer src="/app.js"></script>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>godist</h1>
+      <p>Distribution Fit Explorer</p>
+    </div>
+    <span id="sample-size">Daten werden geladen …</span>
+  </header>
+
+  <main>
+    <section class="panel controls">
+      <div>
+        <h2>Modelle</h2>
+        <div id="model-toggles" class="toggles"></div>
+      </div>
+      <div>
+        <h2>Histogramm</h2>
+        <label>
+          Klassen
+          <input id="bins-input" type="number" min="1" max="500" step="1">
+        </label>
+        <button id="bins-auto" type="button">Automatisch</button>
+        <span id="bins-info"></span>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>PDF · Dichtefunktion</h2>
+      <p>Histogramm und angepasste Verteilungen</p>
+      <div id="pdf-chart" class="chart"></div>
+    </section>
+
+    <section class="panel">
+      <h2>CDF · Verteilungsfunktion</h2>
+      <p>Empirische und theoretische Verteilungsfunktionen</p>
+      <div id="cdf-chart" class="chart"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Q-Q-Plots</h2>
+      <p>Theoretische gegen empirische Quantile</p>
+      <div id="qq-charts" class="qq-grid"></div>
+    </section>
+
+    <p id="error" role="alert"></p>
+  </main>
+</body>
+</html>

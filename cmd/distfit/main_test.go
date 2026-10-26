@@ -42,6 +42,7 @@ func TestRunExitCodes(t *testing.T) {
 		{"invalid format", []string{"-file=" + txt, "-format=xml"}, 2},
 		{"invalid decimal", []string{"-file=" + txt, "-decimal=;"}, 2},
 		{"json without all", []string{"-file=" + txt, "-format=json"}, 2},
+		{"plot without all", []string{"-file=" + txt, "-format=plot"}, 2},
 		{"column on txt", []string{"-file=" + txt, "-column=a"}, 2},
 		{"unsupported extension", []string{"-file=d.xlsx"}, 2},
 		{"ambiguous csv without column", []string{"-file=" + wineCSV}, 1},

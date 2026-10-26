@@ -83,10 +83,90 @@ func TestDistributionFunctions(t *testing.T) {
 			assertNear(t, "PDF", tt.dist.PDF(tt.x), tt.pdf)
 			assertNear(t, "CDF", tt.dist.CDF(tt.x), tt.cdf)
 			assertNear(t, "LogPDF", tt.dist.LogPDF(tt.x), math.Log(tt.pdf))
+			assertNear(t, "Quantile(CDF)", tt.dist.Quantile(tt.cdf), tt.x)
 			if got := len(tt.dist.Params()); got == 0 {
 				t.Fatal("Params() returned no parameters")
 			}
 		})
+	}
+}
+
+func TestDistributionQuantileBoundaries(t *testing.T) {
+	tests := []struct {
+		name  string
+		dist  ContinuousDistribution
+		lower float64
+		upper float64
+	}{
+		{"Beta", Beta{Alpha: 2, Beta: 2, Min: 0, Max: 1}, 0, 1},
+		{"Exponential", Exponential{Lambda: 2}, 0, math.Inf(1)},
+		{"Laplace", Laplace{Mu: 0, Scale: 2}, math.Inf(-1), math.Inf(1)},
+		{"Rayleigh", Rayleigh{Scale: 1}, 0, math.Inf(1)},
+		{"Normal", Normal{Mu: 0, Sigma: 1}, math.Inf(-1), math.Inf(1)},
+		{"Gumbel", Gumbel{Mu: 0, Beta: 1}, math.Inf(-1), math.Inf(1)},
+		{"Gamma", Gamma{Alpha: 2, Beta: 3}, 0, math.Inf(1)},
+		{"LogNormal", LogNormal{Mu: 0, Sigma: 1}, 0, math.Inf(1)},
+		{"Weibull", Weibull{Shape: 2, Scale: 3}, 0, math.Inf(1)},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.dist.Quantile(0); got != tt.lower {
+				t.Errorf("Quantile(0) = %g, want %g", got, tt.lower)
+			}
+			if got := tt.dist.Quantile(1); got != tt.upper {
+				t.Errorf("Quantile(1) = %g, want %g", got, tt.upper)
+			}
+			for _, p := range []float64{-0.1, 1.1, math.NaN()} {
+				if got := tt.dist.Quantile(p); !math.IsNaN(got) {
+					t.Errorf("Quantile(%g) = %g, want NaN outside [0, 1]", p, got)
+				}
+			}
+		})
+	}
+}
+
+func TestDistributionQuantileRoundTrip(t *testing.T) {
+	dists := []struct {
+		name string
+		dist ContinuousDistribution
+	}{
+		{"Beta", Beta{Alpha: 2, Beta: 3, Min: -1, Max: 4}},
+		{"Exponential", Exponential{Lambda: 1.5}},
+		{"Laplace", Laplace{Mu: 1, Scale: 2}},
+		{"Rayleigh", Rayleigh{Scale: 1.5}},
+		{"Normal", Normal{Mu: 1, Sigma: 2}},
+		{"Gumbel", Gumbel{Mu: 1, Beta: 2}},
+		{"Gamma", Gamma{Alpha: 2.5, Beta: 3}},
+		{"LogNormal", LogNormal{Mu: 0, Sigma: 0.8}},
+		{"Weibull", Weibull{Shape: 1.7, Scale: 3}},
+	}
+	probs := []float64{0.001, 0.01, 0.1, 0.25, 0.5, 0.75, 0.9, 0.99, 0.999}
+
+	for _, tt := range dists {
+		t.Run(tt.name, func(t *testing.T) {
+			for _, p := range probs {
+				x := tt.dist.Quantile(p)
+				if math.IsNaN(x) || math.IsInf(x, 0) {
+					t.Fatalf("Quantile(%g) = %g, want a finite value", p, x)
+				}
+				if got := tt.dist.CDF(x); math.Abs(got-p) > 1e-9 {
+					t.Errorf("CDF(Quantile(%g)) = %.12g, want %g", p, got, p)
+				}
+			}
+		})
+	}
+}
+
+func TestDistributionQuantileMonotone(t *testing.T) {
+	dist := Gamma{Alpha: 0.7, Beta: 2}
+	previous := math.Inf(-1)
+	for _, p := range []float64{0.001, 0.1, 0.2, 0.5, 0.8, 0.99} {
+		q := dist.Quantile(p)
+		if q <= previous {
+			t.Errorf("Quantile(%g) = %g is not larger than previous quantile %g", p, q, previous)
+		}
+		previous = q
 	}
 }
 
@@ -199,6 +279,9 @@ func TestDistributionRejectsInvalidParameters(t *testing.T) {
 			}
 			if got := tt.dist.LogPDF(1); !math.IsInf(got, -1) {
 				t.Errorf("LogPDF(1) = %g, want -Inf for invalid parameters", got)
+			}
+			if got := tt.dist.Quantile(0.5); !math.IsNaN(got) {
+				t.Errorf("Quantile(0.5) = %g, want NaN for invalid parameters", got)
 			}
 		})
 	}

@@ -12,6 +12,16 @@ type Laplace struct {
 	Scale float64 // Skalierungsparameter (b > 0)
 }
 
+func (l Laplace) Quantile(p float64) float64 {
+	if !l.Valid() || !validProbability(p) {
+		return math.NaN()
+	}
+	if p < 0.5 {
+		return l.Mu + l.Scale*math.Log(2*p)
+	}
+	return l.Mu - l.Scale*math.Log(2*(1-p))
+}
+
 func (l Laplace) Params() []float64 {
 	return []float64{l.Mu, l.Scale}
 }

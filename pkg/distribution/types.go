@@ -7,6 +7,8 @@ type ContinuousDistribution interface {
 	PDF(x float64) float64
 	CDF(x float64) float64
 	LogPDF(x float64) float64
+	// Quantile liefert das p-Quantil für p in [0, 1] (Umkehrung der CDF); sonst bzw. bei ungültigen Parametern NaN.
+	Quantile(p float64) float64
 	Params() []float64
 	// ParamNames liefert die Namen der Parameter in derselben Reihenfolge wie Params().
 	ParamNames() []string

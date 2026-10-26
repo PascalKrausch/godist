@@ -13,6 +13,13 @@ type Gamma struct {
 	Beta  float64 // Scale parameter (θ > 0)
 }
 
+func (g Gamma) Quantile(p float64) float64 {
+	if g.Alpha <= 0 || g.Beta <= 0 || !validProbability(p) {
+		return math.NaN()
+	}
+	return g.Beta * mathext.GammaIncRegInv(g.Alpha, p)
+}
+
 func (g Gamma) Params() []float64 {
 	return []float64{g.Alpha, g.Beta}
 }

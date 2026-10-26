@@ -13,6 +13,13 @@ type LogNormal struct {
 	Sigma float64 // Standardabweichung der logarithmierten Daten SD[ln(X)]
 }
 
+func (l LogNormal) Quantile(p float64) float64 {
+	if l.Sigma <= 0 || !validProbability(p) {
+		return math.NaN()
+	}
+	return math.Exp(l.Mu + l.Sigma*stdNormalQuantile(p))
+}
+
 func (l LogNormal) Params() []float64 {
 	return []float64{l.Mu, l.Sigma}
 }

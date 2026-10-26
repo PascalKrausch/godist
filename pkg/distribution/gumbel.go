@@ -13,6 +13,13 @@ type Gumbel struct {
 	Beta float64 // Skalenparameter (Scale β > 0)
 }
 
+func (g Gumbel) Quantile(p float64) float64 {
+	if g.Beta <= 0 || !validProbability(p) {
+		return math.NaN()
+	}
+	return g.Mu - g.Beta*math.Log(-math.Log(p))
+}
+
 func (g Gumbel) Params() []float64 {
 	return []float64{g.Mu, g.Beta}
 }

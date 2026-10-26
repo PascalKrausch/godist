@@ -13,6 +13,13 @@ type Normal struct {
 	Sigma float64 // Standardabweichung (σ > 0)
 }
 
+func (n Normal) Quantile(p float64) float64 {
+	if n.Sigma <= 0 || !validProbability(p) {
+		return math.NaN()
+	}
+	return n.Mu + n.Sigma*stdNormalQuantile(p)
+}
+
 func (n Normal) Params() []float64 {
 	return []float64{n.Mu, n.Sigma}
 }

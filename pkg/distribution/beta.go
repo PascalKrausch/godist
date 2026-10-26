@@ -19,6 +19,22 @@ type Beta struct {
 	Max   float64 // Obere Intervallgrenze
 }
 
+func (b Beta) Quantile(p float64) float64 {
+	if !b.Valid() || !validProbability(p) {
+		return math.NaN()
+	}
+	if p == 0 {
+		return b.Min
+	}
+	if p == 1 {
+		return b.Max
+	}
+	y := bisectCDF(func(y float64) float64 {
+		return mathext.RegIncBeta(b.Alpha, b.Beta, y)
+	}, p, 0, 1)
+	return b.Min + y*(b.Max-b.Min)
+}
+
 func (b Beta) Params() []float64 {
 	return []float64{b.Alpha, b.Beta, b.Min, b.Max}
 }

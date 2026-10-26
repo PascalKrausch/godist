@@ -1,0 +1,104 @@
+:root {
+  color-scheme: light dark;
+  font-family: system-ui, sans-serif;
+}
+
+body {
+  margin: 0;
+  background: Canvas;
+  color: CanvasText;
+}
+
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.25rem 2rem;
+  border-bottom: 1px solid #8885;
+}
+
+header h1,
+header p {
+  margin: 0;
+}
+
+header p,
+.panel > p {
+  opacity: 0.7;
+}
+
+main {
+  max-width: 1400px;
+  margin: auto;
+  padding: 1.5rem;
+  display: grid;
+  gap: 1.5rem;
+}
+
+.panel {
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid #8885;
+  border-radius: 12px;
+}
+
+.chart {
+  width: 100%;
+  min-height: 320px;
+}
+
+.qq-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr));
+  gap: 1rem;
+}
+
+.qq-grid > section {
+  min-width: 0;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2rem;
+}
+
+.controls h2 {
+  font-size: 1.1rem;
+}
+
+.toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+}
+
+.toggles label,
+.controls label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+#bins-input {
+  width: 5rem;
+}
+
+#bins-info {
+  margin-left: 0.5rem;
+  opacity: 0.7;
+}
+
+#error {
+  color: #d44;
+}
+
+@media (max-width: 600px) {
+  header {
+    padding: 1rem;
+  }
+
+  main {
+    padding: 0.75rem;
+  }
+}
