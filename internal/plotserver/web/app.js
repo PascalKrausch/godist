@@ -20,6 +20,8 @@ const state = {
   pdf: null,
   cdf: null,
   qq: [],
+  summaryRows: [],
+  descriptiveBuilt: false,
   hidden: new Set(),
   togglesBuilt: false,
 };
@@ -178,6 +180,75 @@ function setModelVisible(name, visible) {
   for (const entry of state.qq) {
     if (entry.name === name) entry.section.hidden = !visible;
   }
+
+  for (const entry of state.summaryRows) {
+    if (entry.name === name) entry.row.hidden = !visible;
+  }
+}
+
+// formatNumber zeigt sechs signifikante Stellen; fehlende (null) Werte erscheinen als Gedankenstrich.
+function formatNumber(value) {
+  return value === null ? "–" : value.toPrecision(6);
+}
+
+// Parameter und Gütemaße ändern sich nicht mit der Klassenanzahl, daher wird die Tabelle nur einmal gefüllt.
+function renderSummary(payload) {
+  if (state.summaryRows.length > 0) return;
+
+  const body = document.querySelector("#summary-body");
+  for (const model of payload.models) {
+    const row = document.createElement("tr");
+    const params = model.params.map(p => `${p.name} = ${formatNumber(p.value)}`).join(", ");
+    const cells = [
+      model.name,
+      params,
+      formatNumber(model.metrics.aic),
+      formatNumber(model.metrics.bic),
+      formatNumber(model.metrics.ks),
+      formatNumber(model.metrics.rmse),
+    ];
+
+    cells.forEach((text, i) => {
+      const cell = document.createElement("td");
+      cell.textContent = text;
+      if (i >= 2) cell.className = "num";
+      row.append(cell);
+    });
+    row.hidden = state.hidden.has(model.name);
+    body.append(row);
+    state.summaryRows.push({ name: model.name, row });
+  }
+}
+
+function renderDescriptive(payload) {
+  if (state.descriptiveBuilt) return;
+  state.descriptiveBuilt = true;
+
+  const d = payload.descriptive;
+  const rows = [
+    ["Mittelwert", formatNumber(d.mean)],
+    ["Median", formatNumber(d.median)],
+    ["Varianz", formatNumber(d.variance)],
+    ["Standardabweichung", formatNumber(d.std_dev)],
+    ["Minimum", formatNumber(d.min)],
+    ["Q1 (25 %-Quantil)", formatNumber(d.q1)],
+    ["Q3 (75 %-Quantil)", formatNumber(d.q3)],
+    ["Maximum", formatNumber(d.max)],
+    ["Schiefe", formatNumber(d.skewness)],
+    ["Kurtosis (Excess)", formatNumber(d.kurtosis)],
+  ];
+
+  const body = document.querySelector("#descriptive-body");
+  for (const [label, text] of rows) {
+    const row = document.createElement("tr");
+    const name = document.createElement("td");
+    name.textContent = label;
+    const value = document.createElement("td");
+    value.textContent = text;
+    value.className = "num";
+    row.append(name, value);
+    body.append(row);
+  }
 }
 
 function renderModelToggles(payload) {
@@ -220,6 +291,8 @@ async function update(bins) {
   }
 
   renderModelToggles(payload);
+  renderSummary(payload);
+  renderDescriptive(payload);
   renderPDF(payload);
   renderCDF(payload);
   renderQQ(payload);

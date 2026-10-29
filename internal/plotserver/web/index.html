@@ -53,6 +53,42 @@
       <div id="qq-charts" class="qq-grid"></div>
     </section>
 
+    <section class="panel">
+      <h2>Parameter und Gütemaße</h2>
+      <p>Geschätzte Parameter sowie AIC, BIC, KS-Statistik und RMSE je Modell</p>
+      <div class="table-wrap">
+        <table id="summary-table">
+          <thead>
+            <tr>
+              <th>Modell</th>
+              <th>Parameter</th>
+              <th class="num">AIC</th>
+              <th class="num">BIC</th>
+              <th class="num">KS</th>
+              <th class="num">RMSE</th>
+            </tr>
+          </thead>
+          <tbody id="summary-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Deskriptive Statistik</h2>
+      <p>Kennzahlen der verwendeten Stichprobe</p>
+      <div class="table-wrap">
+        <table id="descriptive-table">
+          <thead>
+            <tr>
+              <th>Kennzahl</th>
+              <th class="num">Wert</th>
+            </tr>
+          </thead>
+          <tbody id="descriptive-body"></tbody>
+        </table>
+      </div>
+    </section>
+
     <p id="error" role="alert"></p>
   </main>
 </body>

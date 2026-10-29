@@ -20,6 +20,19 @@ Bei JSON-Ausgabe gehört ausschließlich das JSON-Dokument auf `stdout`; Statusm
   "discarded": 5,
   "candidates": 9,
   "best_distribution": "Weibull",
+  "descriptive": {
+    "n": 1000,
+    "mean": 1.02,
+    "median": 0.98,
+    "variance": 0.31,
+    "std_dev": 0.557,
+    "min": 0.01,
+    "q1": 0.55,
+    "q3": 1.41,
+    "max": 3.9,
+    "skewness": 0.84,
+    "kurtosis": 0.37
+  },
   "models": [
     {
       "name": "Weibull",
@@ -49,6 +62,7 @@ type FitReport struct {
     BestDistribution string                    `json:"best_distribution,omitempty"`
     Models           []FitRow                  `json:"models"`
     Failures         []distribution.FitFailure `json:"failures,omitempty"`
+    Descriptive      stats.Summary             `json:"descriptive"`
 }
 
 var report FitReport

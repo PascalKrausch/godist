@@ -13,10 +13,12 @@ from scipy.stats import (
     expon,
     gamma,
     gumbel_r,
+    kurtosis,
     laplace,
     lognorm,
     norm,
     rayleigh,
+    skew,
     weibull_min,
 )
 
@@ -102,6 +104,55 @@ def cdf_rmse(data, cdf):
         return float("nan")
 
     return float(np.sqrt(np.mean((empirical - theoretical) ** 2)))
+
+
+DESCRIPTIVE_KEYS = [
+    "mean", "median", "variance", "std_dev", "min", "q1", "q3", "max", "skewness", "kurtosis",
+]
+
+
+def describe_scipy(data):
+    """Referenz für internal/stats: ddof=1, Quantile linear (Typ 7), Schiefe und Excess-Kurtosis ohne Bias-Korrektur."""
+    x = np.sort(data)
+    n = len(x)
+    std = float(np.std(x, ddof=1)) if n >= 2 else float("nan")
+    q1, q3 = np.percentile(x, [25, 75])
+    defined = std > 0
+    return {
+        "n": n,
+        "mean": float(np.mean(x)),
+        "median": float(np.median(x)),
+        "variance": float(np.var(x, ddof=1)) if n >= 2 else float("nan"),
+        "std_dev": std,
+        "min": float(x[0]),
+        "q1": float(q1),
+        "q3": float(q3),
+        "max": float(x[-1]),
+        "skewness": float(skew(x, bias=False)) if n >= 3 and defined else float("nan"),
+        "kurtosis": float(kurtosis(x, fisher=True, bias=False)) if n >= 4 and defined else float("nan"),
+    }
+
+
+def compare_descriptive(go_desc, sci_desc, tol):
+    """Vergleicht die Kennzahlen; null im JSON gilt als NaN. Liefert Zeilen und Abweichungen."""
+    rows, mismatches = [], []
+    for key in DESCRIPTIVE_KEYS:
+        go_val = go_desc.get(key)
+        go_val = float("nan") if go_val is None else float(go_val)
+        sci_val = sci_desc[key]
+        if np.isnan(go_val) and np.isnan(sci_val):
+            diff = 0.0
+        elif np.isnan(go_val) or np.isnan(sci_val):
+            diff = float("nan")
+            mismatches.append(f"{key}: Go={go_val} SciPy={sci_val}")
+        else:
+            diff = go_val - sci_val
+            if abs(diff) > tol:
+                mismatches.append(f"{key}: Abweichung {diff:.3g}")
+        rows.append((key, go_val, sci_val, diff))
+    if go_desc.get("n") != sci_desc["n"]:
+        mismatches.append(f"n: Go={go_desc.get('n')} SciPy={sci_desc['n']}")
+    return rows, mismatches
 
 
 def fit_scipy(name, data):
@@ -314,6 +365,16 @@ def main():
             f"SciPy={sr['rmse']:.5f}; "
             f"LogLik SciPy={sr['loglik']:.3f}"
         )
+
+    desc_rows, desc_mismatches = compare_descriptive(
+        go_result.get("descriptive", {}), describe_scipy(data), args.tol
+    )
+    print("\nDeskriptive Statistik")
+    print(f"{'Kennzahl':<10} {'Go':>14} {'SciPy':>14} {'Delta':>12}")
+    print("-" * 52)
+    for key, go_val, sci_val, diff in desc_rows:
+        print(f"{key:<10} {go_val:>14.6f} {sci_val:>14.6f} {diff:>12.2e}")
+    mismatches.extend(desc_mismatches)
 
     if go_result.get("best_distribution"):
         print(

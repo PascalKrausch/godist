@@ -7,6 +7,7 @@ import (
 	"slices"
 	"sort"
 
+	"github.com/PascalKrausch/godist/internal/stats"
 	"github.com/PascalKrausch/godist/pkg/distribution"
 )
 
@@ -19,10 +20,25 @@ const gridPoints = 300
 // maxBins begrenzt die Klassenanzahl des Histogramms.
 const maxBins = 500
 
-// Model ist ein angepasstes Modell mit Anzeigename.
+// Model ist ein angepasstes Modell mit Anzeigename und Gütemetriken.
 type Model struct {
-	Name string
-	Dist distribution.ContinuousDistribution
+	Name    string
+	Dist    distribution.ContinuousDistribution
+	Metrics distribution.FitMetrics
+}
+
+// Param ist ein geschätzter Verteilungsparameter. Value ist null, wenn der Wert nicht endlich ist.
+type Param struct {
+	Name  string   `json:"name"`
+	Value *float64 `json:"value"`
+}
+
+// Metrics enthält die Gütemaße eines Modells. Ungültige Werte sind null.
+type Metrics struct {
+	AIC  *float64 `json:"aic"`
+	BIC  *float64 `json:"bic"`
+	KS   *float64 `json:"ks"`
+	RMSE *float64 `json:"rmse"`
 }
 
 // Series ist eine Folge von (x, y)-Punkten.
@@ -43,9 +59,11 @@ type Histogram struct {
 // ModelPlot enthält die Kurven eines Modells auf dem gemeinsamen Raster.
 // Ungültige Werte (NaN, Inf) sind null, damit die Ausgabe gültiges JSON bleibt.
 type ModelPlot struct {
-	Name string     `json:"name"`
-	PDF  []*float64 `json:"pdf"`
-	CDF  []*float64 `json:"cdf"`
+	Name    string     `json:"name"`
+	Params  []Param    `json:"params"`
+	Metrics Metrics    `json:"metrics"`
+	PDF     []*float64 `json:"pdf"`
+	CDF     []*float64 `json:"cdf"`
 	// QQ: X = theoretisches Quantil, Y = empirisches Quantil.
 	QQ Series `json:"qq"`
 }
@@ -53,11 +71,12 @@ type ModelPlot struct {
 // Payload ist alle Daten, die das Dashboard benötigt.
 // Grid ist das gemeinsame X-Gitter; Histogram.GridDensity, ECDF und die Modellkurven haben dieselbe Länge.
 type Payload struct {
-	SampleSize int         `json:"sample_size"`
-	Grid       []float64   `json:"grid"`
-	Histogram  Histogram   `json:"histogram"`
-	ECDF       []float64   `json:"ecdf"`
-	Models     []ModelPlot `json:"models"`
+	SampleSize  int           `json:"sample_size"`
+	Descriptive stats.Summary `json:"descriptive"`
+	Grid        []float64     `json:"grid"`
+	Histogram   Histogram     `json:"histogram"`
+	ECDF        []float64     `json:"ecdf"`
+	Models      []ModelPlot   `json:"models"`
 }
 
 // MaxBins ist die größte zulässige Klassenanzahl des Histogramms.
@@ -76,8 +95,9 @@ func BuildPayloadWithBins(values []float64, models []Model, bins int) Payload {
 	sort.Float64s(sorted)
 
 	payload := Payload{
-		SampleSize: len(sorted),
-		Models:     make([]ModelPlot, 0, len(models)),
+		SampleSize:  len(sorted),
+		Descriptive: stats.Describe(sorted),
+		Models:      make([]ModelPlot, 0, len(models)),
 	}
 	if len(sorted) == 0 {
 		return payload
@@ -92,10 +112,12 @@ func BuildPayloadWithBins(values []float64, models []Model, bins int) Payload {
 
 	for _, m := range models {
 		payload.Models = append(payload.Models, ModelPlot{
-			Name: m.Name,
-			PDF:  evalOnGrid(payload.Grid, m.Dist.PDF),
-			CDF:  evalOnGrid(payload.Grid, m.Dist.CDF),
-			QQ:   NewQQ(sorted, m.Dist),
+			Name:    m.Name,
+			Params:  modelParams(m.Dist),
+			Metrics: newMetrics(m.Metrics),
+			PDF:     evalOnGrid(payload.Grid, m.Dist.PDF),
+			CDF:     evalOnGrid(payload.Grid, m.Dist.CDF),
+			QQ:      NewQQ(sorted, m.Dist),
 		})
 	}
 	return payload
@@ -229,13 +251,38 @@ func sampleIndices(n int) []int {
 func evalOnGrid(grid []float64, f func(float64) float64) []*float64 {
 	out := make([]*float64, len(grid))
 	for i, x := range grid {
-		y := f(x)
-		if math.IsNaN(y) || math.IsInf(y, 0) {
-			continue
-		}
-		out[i] = &y
+		out[i] = finiteOrNil(f(x))
 	}
 	return out
+}
+
+// finiteOrNil liefert einen Zeiger auf v, oder nil für NaN und Inf.
+func finiteOrNil(v float64) *float64 {
+	if math.IsNaN(v) || math.IsInf(v, 0) {
+		return nil
+	}
+	return &v
+}
+
+// modelParams liefert die geschätzten Parameter in der Reihenfolge von ParamNames.
+func modelParams(dist distribution.ContinuousDistribution) []Param {
+	names := dist.ParamNames()
+	values := dist.Params()
+	params := make([]Param, 0, min(len(names), len(values)))
+	for i := range min(len(names), len(values)) {
+		params = append(params, Param{Name: names[i], Value: finiteOrNil(values[i])})
+	}
+	return params
+}
+
+// newMetrics übernimmt die Gütemaße des Fits.
+func newMetrics(m distribution.FitMetrics) Metrics {
+	return Metrics{
+		AIC:  finiteOrNil(m.AIC),
+		BIC:  finiteOrNil(m.BIC),
+		KS:   finiteOrNil(m.KSStatistic),
+		RMSE: finiteOrNil(m.RMSE),
+	}
 }
 
 // histogramRange liefert den Datenbereich; bei konstanten Daten wird er künstlich um ±0.5 erweitert.

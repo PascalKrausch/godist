@@ -63,6 +63,32 @@ main {
   gap: 2rem;
 }
 
+.table-wrap {
+  overflow-x: auto;
+}
+
+#summary-table,
+#descriptive-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+#summary-table th,
+#summary-table td,
+#descriptive-table th,
+#descriptive-table td {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid #8885;
+  text-align: left;
+  white-space: nowrap;
+}
+
+#summary-table .num,
+#descriptive-table .num {
+  text-align: right;
+}
+
 .controls h2 {
   font-size: 1.1rem;
 }

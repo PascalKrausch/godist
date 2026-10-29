@@ -77,11 +77,15 @@ func TestNewQQMatchesExactModelQuantiles(t *testing.T) {
 type stubDist struct {
 	distribution.ContinuousDistribution
 	pdf, cdf, quantile func(float64) float64
+	params             []float64
+	names              []string
 }
 
 func (s stubDist) PDF(x float64) float64      { return s.pdf(x) }
 func (s stubDist) CDF(x float64) float64      { return s.cdf(x) }
 func (s stubDist) Quantile(p float64) float64 { return s.quantile(p) }
+func (s stubDist) Params() []float64          { return s.params }
+func (s stubDist) ParamNames() []string       { return s.names }
 
 func TestBuildPayloadSharesGridAndMarshalsInvalidValuesAsNull(t *testing.T) {
 	dist := stubDist{
@@ -114,6 +118,48 @@ func TestBuildPayloadSharesGridAndMarshalsInvalidValuesAsNull(t *testing.T) {
 	}
 	if _, err := json.Marshal(payload); err != nil {
 		t.Errorf("payload does not marshal to JSON: %v", err)
+	}
+}
+
+func TestBuildPayloadExposesParamsAndMetricsWithNullForInvalid(t *testing.T) {
+	dist := stubDist{
+		pdf:      func(x float64) float64 { return 1 },
+		cdf:      func(x float64) float64 { return 0.5 },
+		quantile: func(p float64) float64 { return p },
+		params:   []float64{2.5, math.NaN()},
+		names:    []string{"shape", "scale"},
+	}
+	metrics := distribution.FitMetrics{AIC: 10.5, BIC: 12.25, KSStatistic: 0.1, RMSE: math.Inf(1)}
+	payload := BuildPayload([]float64{0.2, 0.4, 0.6, 0.8}, []Model{{Name: "stub", Dist: dist, Metrics: metrics}})
+
+	m := payload.Models[0]
+	if len(m.Params) != 2 || m.Params[0].Name != "shape" || m.Params[1].Name != "scale" {
+		t.Fatalf("params = %+v, want shape, scale in order", m.Params)
+	}
+	if m.Params[0].Value == nil || *m.Params[0].Value != 2.5 {
+		t.Errorf("shape value = %v, want 2.5", m.Params[0].Value)
+	}
+	if m.Params[1].Value != nil {
+		t.Errorf("scale value = %v, want null for NaN", *m.Params[1].Value)
+	}
+	if m.Metrics.AIC == nil || *m.Metrics.AIC != 10.5 || m.Metrics.BIC == nil || *m.Metrics.BIC != 12.25 {
+		t.Errorf("AIC/BIC = %v/%v, want 10.5/12.25", m.Metrics.AIC, m.Metrics.BIC)
+	}
+	if m.Metrics.KS == nil || *m.Metrics.KS != 0.1 {
+		t.Errorf("KS = %v, want 0.1", m.Metrics.KS)
+	}
+	if m.Metrics.RMSE != nil {
+		t.Errorf("RMSE = %v, want null for Inf", *m.Metrics.RMSE)
+	}
+	if _, err := json.Marshal(payload); err != nil {
+		t.Errorf("payload does not marshal to JSON: %v", err)
+	}
+}
+
+func TestBuildPayloadIncludesDescriptiveStats(t *testing.T) {
+	payload := BuildPayload([]float64{4, 1, 3, 2}, nil)
+	if payload.Descriptive.N != 4 || payload.Descriptive.Median != 2.5 || payload.Descriptive.Q1 != 1.75 || payload.Descriptive.Q3 != 3.25 {
+		t.Errorf("descriptive = %+v, want N=4, median=2.5, q1=1.75, q3=3.25", payload.Descriptive)
 	}
 }
 

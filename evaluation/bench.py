@@ -37,7 +37,7 @@ from scipy.stats import (
     weibull_min,
 )
 
-from compare import fit_scipy, load_data
+from compare import describe_scipy, fit_scipy, load_data
 
 REPO = Path(__file__).resolve().parents[1]
 SIZES = [100, 10_000, 1_000_000]
@@ -112,6 +112,9 @@ def bench_algo(repeat):
         stats = time_per_call(lambda: [fit_scipy(name, data) for name in NAMES], repeat)
         results.append({"name": "AllModels", "n": n, **stats})
         print(f"algo  {'AllModels':<12} n={n:<9} median={stats['median_s']:.6f}s", flush=True)
+        stats = time_per_call(lambda: describe_scipy(data), repeat)
+        results.append({"name": "Describe", "n": n, **stats})
+        print(f"algo  {'Describe':<12} n={n:<9} median={stats['median_s']:.6f}s", flush=True)
     return results
 
 
@@ -176,6 +179,7 @@ def child(path, column):
     data, _ = load_data(path, column)
     for name in NAMES:
         fit_scipy(name, data)
+    describe_scipy(data)
 
 
 def environment():
@@ -213,7 +217,7 @@ def run_all(repeat):
 
     print("Go-Benchmarks (go test -bench) ...", flush=True)
     go_bench = subprocess.run(
-        ["go", "test", "./pkg/distribution", "-run", "^$", "-bench", ".", "-benchmem",
+        ["go", "test", "./pkg/distribution", "./internal/stats", "-run", "^$", "-bench", ".", "-benchmem",
          "-benchtime=3s", f"-count={repeat}"],
         cwd=REPO, capture_output=True, text=True,
     )

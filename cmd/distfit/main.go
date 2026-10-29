@@ -13,6 +13,7 @@ import (
 
 	"github.com/PascalKrausch/godist/internal/cli"
 	"github.com/PascalKrausch/godist/internal/plotserver"
+	"github.com/PascalKrausch/godist/internal/stats"
 	"github.com/PascalKrausch/godist/pkg/distribution"
 )
 
@@ -116,7 +117,7 @@ func runAll(stdout, stderr io.Writer, ds cli.Dataset, filePath, format string) i
 		return runPlot(stderr, ds.Values, results)
 	}
 
-	report := cli.BuildFitReport(results, failures, filePath, ds.Column, len(ds.Values), len(ds.Discarded))
+	report := cli.BuildFitReport(results, failures, filePath, ds.Column, stats.Describe(ds.Values), len(ds.Discarded))
 
 	if format == "json" {
 		if err := cli.WriteJSONReport(stdout, report); err != nil {
@@ -166,7 +167,7 @@ func runBest(stdout, stderr io.Writer, ds cli.Dataset) int {
 		fmt.Fprintf(stderr, "Fehler: Fitting fehlgeschlagen: %v\n", err)
 		return exitFailure
 	}
-	cli.WriteSummary(stdout, best, metrics, ds.Column, len(ds.Values), len(ds.Discarded))
+	cli.WriteSummary(stdout, best, metrics, ds.Column, stats.Describe(ds.Values), len(ds.Discarded))
 	return exitOK
 }
 

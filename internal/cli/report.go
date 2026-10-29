@@ -3,7 +3,9 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 
+	"github.com/PascalKrausch/godist/internal/stats"
 	"github.com/PascalKrausch/godist/pkg/distribution"
 
 	"io"
@@ -31,6 +33,7 @@ type FitReport struct {
 	Discarded        int                       `json:"discarded"`
 	Candidates       int                       `json:"candidates"`
 	BestDistribution string                    `json:"best_distribution,omitempty"`
+	Descriptive      stats.Summary             `json:"descriptive"`
 	Models           []FitRow                  `json:"models"`
 	Failures         []distribution.FitFailure `json:"failures,omitempty"`
 }
@@ -39,14 +42,15 @@ type FitReport struct {
 
 // BuildFitReport erstellt einen Bericht aus erfolgreichen Fits und Fehlern.
 // sampleSize ist die Anzahl verwendeter Werte, discarded die Anzahl verworfener Eingaben.
-func BuildFitReport(results []distribution.FitResult, failures []distribution.FitFailure, input string, column string, sampleSize int, discarded int) FitReport {
+func BuildFitReport(results []distribution.FitResult, failures []distribution.FitFailure, input string, column string, descriptive stats.Summary, discarded int) FitReport {
 	report := FitReport{
-		Input:      input,
-		Column:     column,
-		SampleSize: sampleSize,
-		Discarded:  discarded,
-		Models:     make([]FitRow, 0, len(results)),
-		Failures:   failures,
+		Input:       input,
+		Column:      column,
+		SampleSize:  descriptive.N,
+		Discarded:   discarded,
+		Descriptive: descriptive,
+		Models:      make([]FitRow, 0, len(results)),
+		Failures:    failures,
 	}
 
 	for _, result := range results {
@@ -74,6 +78,8 @@ func WriteTextReport(w io.Writer, report FitReport) error {
 		for _, failure := range report.Failures {
 			fmt.Fprintf(w, "  %s: %s\n", failure.Name, failure.Error)
 		}
+		fmt.Fprintln(w)
+		writeDescriptive(w, report.Descriptive)
 		return nil
 	}
 	fmt.Fprintln(w)
@@ -98,6 +104,8 @@ func WriteTextReport(w io.Writer, report FitReport) error {
 	)
 	fmt.Fprintln(w, "Criterion:    AIC (lower is better)")
 	fmt.Fprintln(w)
+
+	writeDescriptive(w, report.Descriptive)
 
 	best := report.Models[0]
 
@@ -149,16 +157,41 @@ func WriteTextReport(w io.Writer, report FitReport) error {
 }
 
 // WriteSummary schreibt das Ergebnis des Einzelmodells (bestes Modell) als Zusammenfassung.
-func WriteSummary(w io.Writer, dist distribution.ContinuousDistribution, metrics distribution.FitMetrics, column string, sampleSize int, discarded int) {
+func WriteSummary(w io.Writer, dist distribution.ContinuousDistribution, metrics distribution.FitMetrics, column string, descriptive stats.Summary, discarded int) {
 	fmt.Fprintln(w, "=== GODIST FITTER ERGEBNIS ===")
 	if column != "" {
 		fmt.Fprintf(w, "Spalte:         %s\n", column)
 	}
-	fmt.Fprintf(w, "Datenpunkte:    %d%s\n", sampleSize, discardedSuffix(discarded))
+	fmt.Fprintf(w, "Datenpunkte:    %d%s\n", descriptive.N, discardedSuffix(discarded))
 	fmt.Fprintf(w, "Beste Kurve:    %s\n", getDistributionName(dist))
 	fmt.Fprintf(w, "Parameter:      %s\n", formatParams(paramsToMap(dist)))
 	fmt.Fprintf(w, "AIC / BIC:      %.2f / %.2f\n", metrics.AIC, metrics.BIC)
 	fmt.Fprintf(w, "KS-Statistik:   %.4f (RMSE: %.4f)\n", metrics.KSStatistic, metrics.RMSE)
+	fmt.Fprintln(w)
+	writeDescriptive(w, descriptive)
+}
+
+// writeDescriptive schreibt die deskriptiven Kennzahlen als Block. Nicht berechenbare Werte erscheinen als Gedankenstrich.
+func writeDescriptive(w io.Writer, s stats.Summary) {
+	fmt.Fprintln(w, "Descriptive statistics")
+	fmt.Fprintln(w, "----------------------")
+	fmt.Fprintf(w, "Mean:         %s\n", formatStat(s.Mean))
+	fmt.Fprintf(w, "Median:       %s\n", formatStat(s.Median))
+	fmt.Fprintf(w, "Variance:     %s\n", formatStat(s.Variance))
+	fmt.Fprintf(w, "Std. dev.:    %s\n", formatStat(s.StdDev))
+	fmt.Fprintf(w, "Min / Max:    %s / %s\n", formatStat(s.Min), formatStat(s.Max))
+	fmt.Fprintf(w, "Q1 / Q3:      %s / %s\n", formatStat(s.Q1), formatStat(s.Q3))
+	fmt.Fprintf(w, "Skewness:     %s\n", formatStat(s.Skewness))
+	fmt.Fprintf(w, "Kurtosis:     %s (excess)\n", formatStat(s.Kurtosis))
+	fmt.Fprintln(w)
+}
+
+// formatStat formatiert eine Kennzahl mit vier Nachkommastellen; NaN erscheint als Gedankenstrich.
+func formatStat(v float64) string {
+	if math.IsNaN(v) {
+		return "–"
+	}
+	return fmt.Sprintf("%.4f", v)
 }
 
 // WriteJSONReport schreibt den Bericht als eingerücktes JSON.

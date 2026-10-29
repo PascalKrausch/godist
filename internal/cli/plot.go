@@ -10,8 +10,9 @@ func BuildPlotSource(values []float64, results []distribution.FitResult) func(bi
 	models := make([]plot.Model, 0, len(results))
 	for _, result := range results {
 		models = append(models, plot.Model{
-			Name: getDistributionName(result.Dist),
-			Dist: result.Dist,
+			Name:    getDistributionName(result.Dist),
+			Dist:    result.Dist,
+			Metrics: result.Metrics,
 		})
 	}
 	return func(bins int) plot.Payload {
