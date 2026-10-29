@@ -55,7 +55,7 @@ func BuildFitReport(results []distribution.FitResult, failures []distribution.Fi
 
 	for _, result := range results {
 		report.Models = append(report.Models, FitRow{
-			Name:        getDistributionName(result.Dist),
+			Name:        result.Name,
 			Params:      paramsToMap(result.Dist),
 			AIC:         result.Metrics.AIC,
 			BIC:         result.Metrics.BIC,

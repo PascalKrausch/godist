@@ -134,7 +134,16 @@ func readJSON(path string) (Dataset, error) {
 	decoder.UseNumber()
 	var items []any
 	if err := decoder.Decode(&items); err != nil {
-		return Dataset{}, fmt.Errorf("ungültiges JSON-Array: %w", err)
+		// Wenn kein Array, versuche es als Objekt zu parsen und nach numerischen Arrays zu suchen
+		file.Seek(0, 0)
+		var obj map[string]any
+		if err := decoder.Decode(&obj); err != nil {
+			return Dataset{}, fmt.Errorf("ungültiges JSON: %w", err)
+		}
+		items = extractNumericArrays(obj)
+		if len(items) == 0 {
+			return Dataset{}, fmt.Errorf("kein numerisches Array im JSON gefunden")
+		}
 	}
 
 	var ds Dataset
@@ -152,6 +161,45 @@ func readJSON(path string) (Dataset, error) {
 		}
 	}
 	return ds, nil
+}
+
+// extractNumericArrays durchsucht ein JSON-Objekt rekursiv nach Arrays mit numerischen Werten
+// und gibt das erste gefundene numerische Array zurück
+func extractNumericArrays(v any) []any {
+	switch val := v.(type) {
+	case []any:
+		// Prüfe, ob dies ein numerisches Array ist
+		if isNumericArray(val) {
+			return val
+		}
+		// Rekursiv nach Arrays suchen
+		for _, item := range val {
+			if result := extractNumericArrays(item); len(result) > 0 {
+				return result
+			}
+		}
+	case map[string]any:
+		for _, item := range val {
+			if result := extractNumericArrays(item); len(result) > 0 {
+				return result
+			}
+		}
+	}
+
+	return nil
+}
+
+// isNumericArray prüft, ob ein Array nur Zahlen enthält
+func isNumericArray(arr []any) bool {
+	if len(arr) == 0 {
+		return false
+	}
+	for _, item := range arr {
+		if _, ok := item.(json.Number); !ok {
+			return false
+		}
+	}
+	return true
 }
 
 func readCSV(path string, opts ReadOptions) (Dataset, error) {

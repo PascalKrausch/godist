@@ -22,6 +22,7 @@ type Fitter interface {
 
 // FitResult enthält das gefittete Modell und die zugehörigen Qualitätsmetriken.
 type FitResult struct {
+	Name    string
 	Dist    ContinuousDistribution
 	Metrics FitMetrics
 }

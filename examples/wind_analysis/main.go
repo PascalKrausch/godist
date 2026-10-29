@@ -49,7 +49,7 @@ func main() {
 	fmt.Printf("\n--- Fitting-Ergebnisse (JSON Input) ---\n")
 	for _, res := range results {
 		fmt.Printf("Verteilung: %-12s | AIC: %.2f | Parameter: %v\n",
-			res.Dist.(distribution.Fitter).Name(), res.Metrics.AIC, res.Dist.Params())
+			res.Name, res.Metrics.AIC, res.Dist.Params())
 	}
 
 	if len(failures) > 0 {

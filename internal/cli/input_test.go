@@ -155,3 +155,28 @@ func TestReadDatasetNoValidValuesIsError(t *testing.T) {
 		t.Fatal("expected error when no valid values remain")
 	}
 }
+
+func TestReadDatasetNestedJSON(t *testing.T) {
+	// Test mit verschachtelter JSON-Struktur wie Open-Meteo
+	path := writeTempFile(t, "d.json", `{"hourly":{"wind_speed_10m":[1.5,2.5,3.5]}}`)
+	ds, err := ReadDataset(path, ReadOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []float64{1.5, 2.5, 3.5}; !reflect.DeepEqual(ds.Values, want) {
+		t.Fatalf("Values = %v, want %v", ds.Values, want)
+	}
+}
+
+func TestReadDatasetNestedJSONMultipleArrays(t *testing.T) {
+	// Test mit mehreren numerischen Arrays - sollte das erste finden
+	path := writeTempFile(t, "d.json", `{"a":[1,2],"b":[3,4]}`)
+	ds, err := ReadDataset(path, ReadOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Das Ergebnis sollte das erste Array sein ([1,2])
+	if want := []float64{1, 2}; !reflect.DeepEqual(ds.Values, want) {
+		t.Fatalf("Values = %v, want %v", ds.Values, want)
+	}
+}

@@ -39,6 +39,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	allModels := fs.Bool("all", false, "Alle Modelle vergleichen statt nur das beste anzuzeigen")
 	format := fs.String("format", "text", "Ausgabeformat: text, json oder plot (json und plot erfordern -all)")
 	decimal := fs.String("decimal", ".", "Dezimaltrennzeichen: . oder ,")
+	zeroInflated := fs.Bool("zero-inflated", false, "Nullwerte als Zero-Inflated-Modell (Punktmasse bei 0) modellieren; nur ZI-Kandidaten werden verglichen (Standard: Nullwerte lassen Kandidaten mit Träger (0, ∞) scheitern)")
 
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -68,10 +69,14 @@ func run(args []string, stdout, stderr io.Writer) int {
 	if warning != "" {
 		fmt.Fprintf(stderr, "Warnung: %s\n", warning)
 	}
-	if *allModels {
-		return runAll(stdout, stderr, ds, *filePath, *format)
+	policy := distribution.PolicyFastFail
+	if *zeroInflated {
+		policy = distribution.PolicyZeroInflated
 	}
-	return runBest(stdout, stderr, ds)
+	if *allModels {
+		return runAll(stdout, stderr, ds, *filePath, *format, policy)
+	}
+	return runBest(stdout, stderr, ds, policy)
 }
 
 // validateFlags prüft Flag-Kombinationen, bevor Daten gelesen werden.
@@ -106,8 +111,8 @@ func validateFlags(fs *flag.FlagSet, filePath, column, format, decimal string, a
 }
 
 // runAll vergleicht alle Verteilungen und gibt den Bericht aus.
-func runAll(stdout, stderr io.Writer, ds cli.Dataset, filePath, format string) int {
-	results, failures, err := distribution.SelectAllModels(ds.Values)
+func runAll(stdout, stderr io.Writer, ds cli.Dataset, filePath, format string, policy distribution.ZeroPolicy) int {
+	results, failures, err := distribution.SelectAllModelsWithPolicy(ds.Values, policy)
 	if err != nil {
 		fmt.Fprintf(stderr, "Fehler: Fitting fehlgeschlagen: %v\n", err)
 		return exitFailure
@@ -161,8 +166,8 @@ func runPlot(stderr io.Writer, values []float64, results []distribution.FitResul
 }
 
 // runBest gibt nur das beste Modell aus.
-func runBest(stdout, stderr io.Writer, ds cli.Dataset) int {
-	best, metrics, err := distribution.SelectBestModel(ds.Values)
+func runBest(stdout, stderr io.Writer, ds cli.Dataset, policy distribution.ZeroPolicy) int {
+	best, metrics, err := distribution.SelectBestModelWithPolicy(ds.Values, policy)
 	if err != nil {
 		fmt.Fprintf(stderr, "Fehler: Fitting fehlgeschlagen: %v\n", err)
 		return exitFailure
@@ -184,6 +189,7 @@ func writeUsage(w io.Writer, fs *flag.FlagSet) {
 	fmt.Fprintln(w, "  distfit -file=daten.csv -column=density -all")
 	fmt.Fprintln(w, "  distfit -file=daten.csv -column=2 -decimal=, -all -format=json")
 	fmt.Fprintln(w, "  distfit -file=werte.txt -all -format=plot")
+	fmt.Fprintln(w, "  distfit -file=daten.csv -column=citric -zero-inflated -all")
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Exit-Codes: 0 Erfolg, 1 Daten- oder Fitting-Fehler, 2 Aufruf-Fehler")
 }

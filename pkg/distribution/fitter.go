@@ -92,8 +92,23 @@ func freeParamCount(dist ContinuousDistribution) int {
 	return len(dist.Params())
 }
 
+// ZeroPolicy legt fest, welche Kandidaten bei Nullwerten gewertet werden.
+type ZeroPolicy int
+
+const (
+	// ZeroFastFail: Verteilungen mit Träger (0, ∞) scheitern bei Nullwerten.
+	PolicyFastFail ZeroPolicy = iota
+	// PolicyZeroInflated: Nur Zero-Inflated-Varianten; Nullen werden als Punktmasse modelliert.
+	// Stetige Kandidaten werden nicht gewertet, da sie auf einem anderen Maß liegen.
+	PolicyZeroInflated
+)
+
 func SelectBestModel(data []float64) (ContinuousDistribution, FitMetrics, error) {
-	results, _, err := SelectAllModels(data)
+	return SelectBestModelWithPolicy(data, PolicyFastFail)
+}
+
+func SelectBestModelWithPolicy(data []float64, policy ZeroPolicy) (ContinuousDistribution, FitMetrics, error) {
+	results, _, err := SelectAllModelsWithPolicy(data, policy)
 	if err != nil {
 		return nil, FitMetrics{}, err
 	}
@@ -115,7 +130,20 @@ func SelectBestModel(data []float64) (ContinuousDistribution, FitMetrics, error)
 }
 
 func SelectAllModels(data []float64) ([]FitResult, []FitFailure, error) {
-	fitters := []Fitter{
+	return SelectAllModelsWithPolicy(data, PolicyFastFail)
+}
+
+// candidateFitters liefert die Kandidaten für die gewählte Nullwert-Policy.
+func candidateFitters(policy ZeroPolicy) []Fitter {
+	if policy == PolicyZeroInflated {
+		positive := []Fitter{ExponentialFitter{}, GammaFitter{}, WeibullFitter{}, LogNormalFitter{}, RayleighFitter{}}
+		fitters := make([]Fitter, len(positive))
+		for i, base := range positive {
+			fitters[i] = ZeroInflatedFitter{Base: base}
+		}
+		return fitters
+	}
+	return []Fitter{
 		WeibullFitter{},
 		LogNormalFitter{},
 		GammaFitter{},
@@ -126,6 +154,10 @@ func SelectAllModels(data []float64) ([]FitResult, []FitFailure, error) {
 		RayleighFitter{},
 		LaplaceFitter{},
 	}
+}
+
+func SelectAllModelsWithPolicy(data []float64, policy ZeroPolicy) ([]FitResult, []FitFailure, error) {
+	fitters := candidateFitters(policy)
 
 	// Jede Verteilung läuft in einer eigenen Goroutine; Slots pro Index halten die Reihenfolge von fitters bei.
 	outcomes := make([]fitOutcome, len(fitters))
@@ -170,5 +202,5 @@ func fitOne(fitter Fitter, data []float64) fitOutcome {
 		return fitOutcome{failure: &FitFailure{Name: fitter.Name(), Error: err.Error()}}
 	}
 
-	return fitOutcome{result: FitResult{Dist: dist, Metrics: metrics}}
+	return fitOutcome{result: FitResult{Name: fitter.Name(), Dist: dist, Metrics: metrics}}
 }

@@ -49,7 +49,7 @@ Die Verteilungen mit positivem Träger behandeln Nullwerte derzeit **streng**: E
 
 Ein fehlgeschlagener Kandidat wird nicht gerankt. Die Nullzahl ist damit ein bewusst sichtbarer Befund und kein stiller Datenverlust.
 
-Die Policy ist eine Zwischenlösung. Später kann ein **Zero-Inflated-Modell** (Mischung aus einer Punktmasse bei 0 und einer stetigen Verteilung für positive Werte) in Betracht kommen. Dieses würde die Nullen als eigenen Mechanismus modellieren und die Vergleichbarkeit mit reinen stetigen Modellen gesondert betrachten.
+Die Policy ist eine Zwischenlösung. Als Alternative existiert der Typ `ZeroInflated` (Mischung aus einer Punktmasse bei 0 und einer stetigen Verteilung auf (0, ∞)) mit `ZeroInflatedFitter{Base: ...}`. π₀ wird als Anteil der Nullen geschätzt, die Basisverteilung auf den positiven Werten. Der Fitter verlangt mindestens einen Nullwert und zählt π₀ als zusätzlichen Parameter in `k`. Die Modelle sind noch nicht in die Standardauswahl (`SelectAllModels`) aufgenommen, da sie auf einem gemischten Maß liegen und nur mit Modellen gleichen Maßes vergleichbar sind.
 
 ### Auswahlkriterium und Gütemaße
 
