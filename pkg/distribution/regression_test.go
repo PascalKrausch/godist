@@ -112,6 +112,30 @@ func TestRegressionFixedDatasets(t *testing.T) {
 			metricsTol: 0.1,
 		},
 		{
+			name:       "Cauchy simple dataset",
+			data:       []float64{1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0},
+			fitter:     CauchyFitter{},
+			wantParams: []float64{5.5, 2.1422425755772334}, // scipy.stats.cauchy.fit
+			wantMetrics: FitMetrics{
+				SampleSize: 10,
+				Discarded:  0,
+			},
+			paramTol:   1e-4,
+			metricsTol: 0.1,
+		},
+		{
+			name:       "StudentT simple dataset",
+			data:       []float64{-7.0, -2.1, -0.5, 0.3, 1.0, 1.2, 2.2, 3.5, 4.0, 9.5, 0.8, -1.4},
+			fitter:     StudentTFitter{},
+			wantParams: []float64{0.832337749680194, 2.170348604708886, 2.194040467856351}, // scipy.stats.t.fit (mu, scale, nu)
+			wantMetrics: FitMetrics{
+				SampleSize: 12,
+				Discarded:  0,
+			},
+			paramTol:   1e-3,
+			metricsTol: 0.1,
+		},
+		{
 			name:   "Beta bounded dataset",
 			data:   []float64{0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9},
 			fitter: BetaFitter{},

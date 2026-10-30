@@ -334,6 +334,12 @@ func getDistributionName(dist distribution.ContinuousDistribution) string {
 		return "Rayleigh"
 	case distribution.Pareto:
 		return "Pareto"
+	case distribution.ChiSquare:
+		return "ChiSquare"
+	case distribution.Cauchy:
+		return "Cauchy"
+	case distribution.StudentT:
+		return "StudentT"
 	default:
 		return "Unknown"
 	}

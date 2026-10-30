@@ -136,7 +136,7 @@ func SelectAllModels(data []float64) ([]FitResult, []FitFailure, error) {
 // candidateFitters liefert die Kandidaten für die gewählte Nullwert-Policy.
 func candidateFitters(policy ZeroPolicy) []Fitter {
 	if policy == PolicyZeroInflated {
-		positive := []Fitter{ExponentialFitter{}, GammaFitter{}, WeibullFitter{}, LogNormalFitter{}, RayleighFitter{}, ParetoFitter{}}
+		positive := []Fitter{ExponentialFitter{}, GammaFitter{}, WeibullFitter{}, LogNormalFitter{}, RayleighFitter{}, ParetoFitter{}, ChiSquareFitter{}}
 		fitters := make([]Fitter, len(positive))
 		for i, base := range positive {
 			fitters[i] = ZeroInflatedFitter{Base: base}
@@ -155,6 +155,9 @@ func candidateFitters(policy ZeroPolicy) []Fitter {
 		LaplaceFitter{},
 		LogisticFitter{},
 		ParetoFitter{},
+		ChiSquareFitter{},
+		CauchyFitter{},
+		StudentTFitter{},
 	}
 }
 

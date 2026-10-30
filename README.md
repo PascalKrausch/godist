@@ -32,6 +32,11 @@
 | Logistic | `mu`, `scale` | ℝ |
 | Rayleigh | `scale` | [0, ∞) |
 | Pareto | `shape`, `scale` | [scale, ∞) |
+| ChiSquare | `df` | [0, ∞) |
+| Cauchy | `mu`, `scale` | ℝ |
+| StudentT | `mu`, `scale`, `nu` | ℝ |
+
+Student-t: ν wird per Profil-Likelihood auf [0.1, 10⁹] begrenzt. Nahezu normalverteilte Daten erhalten daher sehr große ν-Werte, die an SciPy angenähert sind (White-Wine: ν ≈ 3.5·10⁷ statt 7.7·10⁸, AIC-Abweichung 0.00).
 
 
 ## Methodik
@@ -43,12 +48,12 @@ Die Verteilungen mit positivem Träger behandeln Nullwerte derzeit **streng**: E
 - **LogNormal:** scheitert bei jedem Nullwert, da `log(0)` nicht definiert ist.
 - **Gamma und Weibull:** scheitern bei jedem Nullwert. Die Dichte an der Stelle 0 ist für Formparameter ungleich 1 entweder 0 oder unendlich. Für Formparameter genau 1 entspricht die Verteilung der Exponentialverteilung, die Nullwerte behält.
 - **Rayleigh:** Nullen werden bei der Schätzung ignoriert, die Dichte an der Stelle 0 ist aber 0. Der Kandidat scheitert daher bei jedem Nullwert.
-- **Pareto:** Der Träger beginnt bei `xm = min(x)`, Nullwerte liegen außerhalb des Trägers. Der Kandidat scheitert daher bei jedem Nullwert.
+- **ChiSquare:** Der Träger ist [0, ∞). Nullwerte liegen für k > 0 am Rand des Trägers und werden wie bei Gamma abgelehnt (Fast-Fail).
 - **Exponential:** behält Nullwerte; die Dichte an der Stelle 0 ist endlich, der Kandidat ist also nicht betroffen.
 - **Normal, Gumbel, Laplace, Logistic:** behalten Nullwerte (`CleanDataWithZero`) und sind von dieser Regel nicht betroffen.
 - **Beta:** Der Träger wird aus den Daten abgeleitet ( Ob Nullwerte scheitern, entscheidet die Dichteprüfung.
 
-**Negative Werte** werden ebenfalls über die Trägerprüfung behandelt: Exponential, Gamma, Weibull, LogNormal, Rayleigh und Pareto lehnen jeden negativen Wert mit `ErrNegativeValues` ab. Normal, Gumbel und Laplace sowie Beta (Träger aus den Daten) verarbeiten negative Werte. Alle Kandidaten werten so dieselbe Stichprobe aus.
+**Negative Werte** werden ebenfalls über die Trägerprüfung behandelt: Exponential, Gamma, Weibull, LogNormal, Rayleigh, Pareto und ChiSquare lehnen jeden negativen Wert mit `ErrNegativeValues` ab. Normal, Gumbel, Laplace, Cauchy und StudentT sowie Beta (Träger aus den Daten) verarbeiten negative Werte. Alle Kandidaten werten so dieselbe Stichprobe aus.
 
 Ein fehlgeschlagener Kandidat wird nicht gerankt. Die Nullzahl ist damit ein bewusst sichtbarer Befund und kein stiller Datenverlust.
 
@@ -112,7 +117,7 @@ Getestet werden unter anderem
 
 ### Weitere Verteilungen
 
-- Logistic, LogLogistic, Student-t, Chi-Quadrat, GEV, Cauchy und Pareto sind weiterhin geplant
+- LogLogistic und GEV sind weiterhin geplant
 
 ### Dokumentation
 

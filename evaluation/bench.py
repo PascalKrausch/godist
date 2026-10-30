@@ -35,9 +35,14 @@ from scipy.stats import (
     lognorm,
     norm,
     pareto,
+    chi2,
+    t as student_t,
+    cauchy,
     rayleigh,
     weibull_min,
 )
+
+from evaluation.compare import describe_scipy, fit_scipy, load_data
 
 REPO = Path(__file__).resolve().parents[1]
 SIZES = [100, 10_000, 1_000_000]
@@ -45,7 +50,7 @@ SEED = 42
 GOLDEN_GAMMA = 0x9E3779B97F4A7C15
 NAMES = [
     "Beta", "Exponential", "Normal", "Gumbel", "Gamma",
-    "LogNormal", "Weibull", "Laplace", "Logistic", "Rayleigh", "Pareto",
+    "LogNormal", "Weibull", "Laplace", "Logistic", "Rayleigh", "Pareto", "ChiSquare", "Cauchy", "StudentT",
 ]
 
 
@@ -85,6 +90,9 @@ FIT_CALLS = {
     "Logistic": lambda d: logistic.fit(d),
     "Rayleigh": lambda d: rayleigh.fit(d, floc=0),
     "Pareto": lambda d: pareto.fit(d, floc=0),
+    "ChiSquare": lambda d: chi2.fit(d, floc=0, fscale=1),
+    "Cauchy": lambda d: cauchy.fit(d),
+    "StudentT": lambda d: student_t.fit(d),
 }
 
 

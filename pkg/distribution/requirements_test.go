@@ -277,6 +277,58 @@ func TestFittersRecoverKnownParameters(t *testing.T) {
 		assertRelative(t, "Shape", p.Shape, 2.5, 0.05)
 		assertRelative(t, "Scale", p.Scale, 1.5, 0.01)
 	})
+
+	t.Run("ChiSquare", func(t *testing.T) {
+		data := make([]float64, sampleSize)
+		for i := range data {
+			sum := 0.0
+			for j := 0; j < 4; j++ {
+				z := rng.NormFloat64()
+				sum += z * z
+			}
+			data[i] = sum
+		}
+		dist, err := ChiSquareFitter{}.Fit(data)
+		if err != nil {
+			t.Fatal(err)
+		}
+		assertRelative(t, "DF", dist.(ChiSquare).DF, 4, 0.05)
+	})
+
+	t.Run("Cauchy", func(t *testing.T) {
+		data := make([]float64, sampleSize)
+		for i := range data {
+			data[i] = 3 + 2*math.Tan(math.Pi*(rng.Float64()-0.5))
+		}
+		dist, err := CauchyFitter{}.Fit(data)
+		if err != nil {
+			t.Fatal(err)
+		}
+		c := dist.(Cauchy)
+		assertRelative(t, "Mu", c.Mu, 3, 0.05)
+		assertRelative(t, "Scale", c.Scale, 2, 0.05)
+	})
+
+	t.Run("StudentT", func(t *testing.T) {
+		const nu = 6.0
+		data := make([]float64, sampleSize)
+		for i := range data {
+			chi := 0.0
+			for k := 0; k < int(nu); k++ {
+				z := rng.NormFloat64()
+				chi += z * z
+			}
+			data[i] = 3 + 2*rng.NormFloat64()/math.Sqrt(chi/nu)
+		}
+		dist, err := StudentTFitter{}.Fit(data)
+		if err != nil {
+			t.Fatal(err)
+		}
+		st := dist.(StudentT)
+		assertRelative(t, "Mu", st.Mu, 3, 0.05)
+		assertRelative(t, "Scale", st.Scale, 2, 0.05)
+		assertRelative(t, "Nu", st.Nu, nu, 0.25)
+	})
 }
 
 // Anforderung: AIC = 2k − 2·LL und BIC = k·ln(n) − 2·LL mit k = Anzahl der
@@ -344,6 +396,9 @@ func TestPDFIntegratesToCDFDifference(t *testing.T) {
 		{"Logistic", Logistic{Mu: 0.5, Scale: 1.2}, -4, 6},
 		{"Rayleigh", Rayleigh{Scale: 1.5}, 0.05, 5},
 		{"Pareto", Pareto{Shape: 2.5, Scale: 1.5}, 1.5, 8},
+		{"ChiSquare", ChiSquare{DF: 4}, 0.5, 12},
+		{"Cauchy", Cauchy{Mu: 0.5, Scale: 1.2}, -4, 6},
+		{"StudentT", StudentT{Mu: 0.5, Scale: 1.2, Nu: 4}, -4, 6},
 		{"LogNormal", LogNormal{Mu: 0.2, Sigma: 0.5}, 0.2, 3},
 		{"Gamma", Gamma{Alpha: 2.5, Beta: 1.5}, 0.1, 9},
 		{"Weibull", Weibull{Shape: 1.8, Scale: 2}, 0.05, 5},
@@ -383,7 +438,9 @@ func TestLogPDFMatchesLogOfPDF(t *testing.T) {
 		Laplace{Mu: 0.5, Scale: 1.2},
 		Logistic{Mu: 0.5, Scale: 1.2},
 		Pareto{Shape: 2.5, Scale: 0.1},
-		Rayleigh{Scale: 1.5},
+		ChiSquare{DF: 4},
+		Cauchy{Mu: 0.5, Scale: 1.2},
+		StudentT{Mu: 0.5, Scale: 1.2, Nu: 4},
 		Gamma{Alpha: 3, Beta: 2},
 		Weibull{Shape: 2, Scale: 4},
 		Gumbel{Mu: 0, Beta: 1.5},

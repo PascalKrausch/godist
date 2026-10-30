@@ -4,6 +4,8 @@ import (
 	"errors"
 	"math"
 	"testing"
+
+	"gonum.org/v1/gonum/mathext"
 )
 
 func TestFittersFitValidData(t *testing.T) {
@@ -28,6 +30,9 @@ func TestFittersFitValidData(t *testing.T) {
 		{"Logistic", LogisticFitter{}, 2, false},
 		{"Rayleigh", RayleighFitter{}, 1, true},
 		{"Pareto", ParetoFitter{}, 2, true},
+		{"ChiSquare", ChiSquareFitter{}, 1, true},
+		{"Cauchy", CauchyFitter{}, 2, false},
+		{"StudentT", StudentTFitter{}, 3, false},
 	}
 
 	for _, tt := range tests {
@@ -93,6 +98,10 @@ func TestFittersRejectInsufficientOrInvalidData(t *testing.T) {
 		{"Rayleigh needs positive observations", RayleighFitter{}, []float64{0, 0}},
 		{"Pareto needs positive observations", ParetoFitter{}, []float64{0, 1, 2}},
 		{"Pareto needs varying observations", ParetoFitter{}, []float64{2, 2, 2}},
+		{"ChiSquare needs positive observations", ChiSquareFitter{}, []float64{0, 1, 2}},
+		{"Cauchy needs varying observations", CauchyFitter{}, []float64{2, 2, 2}},
+		{"StudentT needs at least three observations", StudentTFitter{}, []float64{1, 2}},
+		{"StudentT needs varying observations", StudentTFitter{}, []float64{2, 2, 2}},
 		{"Beta rejects values on specified boundaries", BetaFitter{Min: 0, Max: 1}, []float64{0, 0.3, 0.8}},
 	}
 
@@ -277,9 +286,104 @@ func TestWeibullSolverRejectsDegenerateData(t *testing.T) {
 	}
 }
 
+// Anforderung: Der Chi-Quadrat-Fitter erfüllt die MLE-Gleichung ψ(k/2) = mean(ln x) − ln 2
+// und liefert für bekannte Freiheitsgrade eine konsistente Schätzung.
+func TestChiSquareFitterSatisfiesMLEEquation(t *testing.T) {
+	rng := newTestRNG()
+	data := make([]float64, 5000)
+	for i := range data {
+		sum := 0.0
+		for j := 0; j < 6; j++ {
+			z := rng.NormFloat64()
+			sum += z * z
+		}
+		data[i] = sum
+	}
+	dist, err := ChiSquareFitter{}.Fit(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := dist.(ChiSquare).DF
+	meanLog := 0.0
+	for _, x := range data {
+		meanLog += math.Log(x)
+	}
+	meanLog /= float64(len(data))
+	if residual := mathext.Digamma(got/2) - (meanLog - math.Ln2); math.Abs(residual) > 1e-9 {
+		t.Errorf("MLE-Residuum = %g, want ~0 (DF = %g)", residual, got)
+	}
+	if math.Abs(got-6) > 0.3 {
+		t.Errorf("DF = %g, want ~6", got)
+	}
+}
+
+// Anforderung: Der Cauchy-Fitter erfüllt die Score-Gleichungen der Likelihood:
+// Σ 2d/(s²+d²) = 0 für μ und n = Σ 2d²/(s²+d²) für s, mit d = x − μ.
+func TestCauchyFitterSatisfiesScoreEquations(t *testing.T) {
+	rng := newTestRNG()
+	data := make([]float64, 5000)
+	for i := range data {
+		data[i] = 3 + 2*math.Tan(math.Pi*(rng.Float64()-0.5))
+	}
+	dist, err := CauchyFitter{}.Fit(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := dist.(Cauchy)
+	n := float64(len(data))
+	s2 := c.Scale * c.Scale
+	muScore, scaleScore := 0.0, n
+	for _, x := range data {
+		d := x - c.Mu
+		muScore += 2 * d / (s2 + d*d)
+		scaleScore -= 2 * d * d / (s2 + d*d)
+	}
+	if math.Abs(muScore)/n > 1e-8 {
+		t.Errorf("μ-Score = %g, want ~0", muScore)
+	}
+	if math.Abs(scaleScore)/n > 1e-8 {
+		t.Errorf("Scale-Score = %g, want ~0", scaleScore)
+	}
+}
+
+// Anforderung: Der StudentT-Fitter erfüllt für das geschätzte ν die Score-Gleichungen der Likelihood:
+// Σ (ν+1)d/(νs²+d²) = 0 für μ und Σ (ν+1)d²/(νs²+d²) = n für s, mit d = x − μ.
+func TestStudentTFitterSatisfiesScoreEquations(t *testing.T) {
+	rng := newTestRNG()
+	const nu = 6.0
+	data := make([]float64, 5000)
+	for i := range data {
+		chi := 0.0
+		for k := 0; k < int(nu); k++ {
+			z := rng.NormFloat64()
+			chi += z * z
+		}
+		data[i] = 3 + 2*rng.NormFloat64()/math.Sqrt(chi/nu)
+	}
+	dist, err := StudentTFitter{}.Fit(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	st := dist.(StudentT)
+	n := float64(len(data))
+	nuS2 := st.Nu * st.Scale * st.Scale
+	muScore, scaleScore := 0.0, -n
+	for _, x := range data {
+		d := x - st.Mu
+		muScore += (st.Nu + 1) * d / (nuS2 + d*d)
+		scaleScore += (st.Nu + 1) * d * d / (nuS2 + d*d)
+	}
+	if math.Abs(muScore)/n > 1e-6 {
+		t.Errorf("μ-Score = %g, want ~0", muScore)
+	}
+	if math.Abs(scaleScore)/n > 1e-6 {
+		t.Errorf("Scale-Score = %g, want ~0", scaleScore)
+	}
+}
+
 func TestPositiveSupportFittersRejectZeros(t *testing.T) {
 	withZero := []float64{0, 0.5, 1.2, 2.3, 3.1, 4.8, 0.9, 1.7}
-	fitters := []Fitter{WeibullFitter{}, GammaFitter{}, RayleighFitter{}, LogNormalFitter{}, ParetoFitter{}}
+	fitters := []Fitter{WeibullFitter{}, GammaFitter{}, RayleighFitter{}, LogNormalFitter{}, ParetoFitter{}, ChiSquareFitter{}}
 	for _, f := range fitters {
 		if _, err := f.Fit(withZero); err == nil {
 			t.Errorf("%s.Fit() accepted data containing 0, want failure", f.Name())

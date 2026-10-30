@@ -19,6 +19,9 @@ from scipy.stats import (
     lognorm,
     norm,
     pareto,
+    chi2,
+    t as student_t,
+    cauchy,
     rayleigh,
     skew,
     weibull_min,
@@ -228,6 +231,22 @@ def fit_scipy(name, data):
         params = {"mu": mu, "scale": scale}
         k = 2
 
+    elif name == "Cauchy":
+        # Go-Fitter: MLE über die Fixpunkt-Score-Gleichungen; SciPy-Referenz über cauchy.fit.
+        mu, scale = cauchy.fit(data)
+        loglik = np.sum(cauchy.logpdf(data, loc=mu, scale=scale))
+        cdf = lambda x: cauchy.cdf(x, loc=mu, scale=scale)
+        params = {"mu": mu, "scale": scale}
+        k = 2
+
+    elif name == "StudentT":
+        # Go-Fitter: ν per Profil-Likelihood, μ und s per EM; SciPy-Referenz über t.fit.
+        df, mu, scale = student_t.fit(data)
+        loglik = np.sum(student_t.logpdf(data, df, loc=mu, scale=scale))
+        cdf = lambda x: student_t.cdf(x, df, loc=mu, scale=scale)
+        params = {"mu": mu, "scale": scale, "nu": df}
+        k = 3
+
     elif name == "Rayleigh":
         if np.any(data <= 0):
             raise ValueError("Rayleigh mit loc=0 benötigt positive Daten")
@@ -245,6 +264,15 @@ def fit_scipy(name, data):
         cdf = lambda x: pareto.cdf(x, shape, loc=0, scale=scale)
         params = {"shape": shape, "scale": scale}
         k = 2
+
+    elif name == "ChiSquare":
+        if np.any(data <= 0):
+            raise ValueError("ChiSquare mit loc=0 benötigt positive Daten")
+        df, _, _ = chi2.fit(data, floc=0, fscale=1)
+        loglik = np.sum(chi2.logpdf(data, df, loc=0, scale=1))
+        cdf = lambda x: chi2.cdf(x, df, loc=0, scale=1)
+        params = {"df": df}
+        k = 1
 
     elif name == "Beta":
         # Dieselbe automatische Randkonvention wie im Go-BetaFitter:
@@ -346,7 +374,7 @@ def main():
     for name in [
         "Gumbel", "Beta", "LogNormal", "Gamma",
         "Normal", "Weibull", "Exponential",
-        "Laplace", "Logistic", "Rayleigh", "Pareto",
+        "Laplace", "Logistic", "Rayleigh", "Pareto", "ChiSquare", "Cauchy", "StudentT",
     ]:
         try:
             scipy_results[name] = fit_scipy(name, data)

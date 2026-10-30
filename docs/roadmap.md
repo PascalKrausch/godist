@@ -56,9 +56,9 @@ Mögliche Erweiterungen:
 
 | Priorität | Verteilungen | Hinweise |
 |---|---|---|
-| Früh | Logistic, Cauchy | Ergänzen symmetrische Modelle mit unterschiedlichen Tail-Eigenschaften; Cauchy benötigt besondere Behandlung, da gewöhnliche Momente nicht existieren. |
+| Früh | Logistic | Ergänzt symmetrische Modelle mit unterschiedlichen Tail-Eigenschaften. |
 | Früh bis mittel | Log-logistisch, Pareto | Nützlich für positive Daten und schwere rechte Tails. |
-| Mittel | Student-t | Symmetrisch mit einstellbarer Tail-Schwere; Freiheitsgrade müssen robust geschätzt werden. |
+| Mittel | Student-t (umgesetzt) | Symmetrisch mit einstellbarer Tail-Schwere; ν per Profil-Likelihood auf [0.1, 10⁴] begrenzt. |
 | Mittel | Chi-Quadrat | Spezialfälle beziehungsweise eng mit vorhandenen Familien verwandt; als eigener Verteilungstyp dennoch praktisch. |
 | Später | Generalized Extreme Value (GEV) | Wertvoll für Extremwertanalysen, aber mit parameterabhängigem Support und anspruchsvoller numerischer Optimierung. |
 
@@ -122,7 +122,7 @@ Getestet werden unter anderem
 
 ### Weitere Verteilungen
 
-- Logistic, LogLogistic, Student-t, Chi-Quadrat, GEV, Cauchy und Pareto sind weiterhin geplant
+- LogLogistic und GEV sind weiterhin geplant
 
 ### Dokumentation
 

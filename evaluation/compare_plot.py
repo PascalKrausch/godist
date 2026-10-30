@@ -25,9 +25,14 @@ from scipy.stats import (
     lognorm,
     norm,
     pareto,
+    chi2,
+    t as student_t,
+    cauchy,
     rayleigh,
     weibull_min,
 )
+
+from evaluation.compare import load_data
 
 REPO = Path(__file__).resolve().parents[1]
 
@@ -55,6 +60,12 @@ def frozen_from_params(name, params):
         return rayleigh(loc=0, scale=p["scale"])
     if name == "Pareto":
         return pareto(p["shape"], loc=0, scale=p["scale"])
+    if name == "ChiSquare":
+        return chi2(p["df"], loc=0, scale=1)
+    if name == "Cauchy":
+        return cauchy(loc=p["mu"], scale=p["scale"])
+    if name == "StudentT":
+        return student_t(p["nu"], loc=p["mu"], scale=p["scale"])
     if name == "Beta":
         lo, hi = p["min"], p["max"]
         return beta_dist(p["alpha"], p["beta"], loc=lo, scale=hi - lo)

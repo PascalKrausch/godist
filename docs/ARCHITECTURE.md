@@ -29,10 +29,13 @@
 │       ├── logistic.go
 │       ├── log_normal.go
 │       ├── numerical_stability_test.go
+│       ├── cauchy.go
+│       ├── chisquare.go
 │       ├── pareto.go
 │       ├── rayleigh.go
 │       ├── regression_test.go
 │       ├── requirements_test.go
+│       ├── studentt.go
 │       ├── types.go
 │       └── weibull.go
 ├── go.mod
