@@ -26,8 +26,10 @@
 │       ├── gaussian.go
 │       ├── gumbel.go
 │       ├── laplace.go
+│       ├── logistic.go
 │       ├── log_normal.go
 │       ├── numerical_stability_test.go
+│       ├── pareto.go
 │       ├── rayleigh.go
 │       ├── regression_test.go
 │       ├── requirements_test.go

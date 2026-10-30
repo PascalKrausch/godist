@@ -92,6 +92,28 @@ func sampleRayleigh(rng *rand.Rand, sigma float64, n int) []float64 {
 	return out
 }
 
+// Pareto per Inversionsmethode: xm·(1−U)^(−1/α).
+func samplePareto(rng *rand.Rand, alpha, xm float64, n int) []float64 {
+	out := make([]float64, n)
+	for i := range out {
+		out[i] = xm * math.Pow(1-rng.Float64(), -1/alpha)
+	}
+	return out
+}
+
+// Logistic per Inversionsmethode: μ + s·ln(U / (1 − U)); U = 0 wird verworfen.
+func sampleLogistic(rng *rand.Rand, mu, s float64, n int) []float64 {
+	out := make([]float64, n)
+	for i := range out {
+		u := rng.Float64()
+		for u == 0 {
+			u = rng.Float64()
+		}
+		out[i] = mu + s*math.Log(u/(1-u))
+	}
+	return out
+}
+
 func sampleBeta(rng *rand.Rand, alpha, betaParam float64, n int) []float64 {
 	out := make([]float64, n)
 
@@ -225,6 +247,17 @@ func TestFittersRecoverKnownParameters(t *testing.T) {
 		assertRelative(t, "Scale", l.Scale, 2, tol)
 	})
 
+	t.Run("Logistic", func(t *testing.T) {
+		data := sampleLogistic(rng, 3, 2, sampleSize)
+		dist, err := LogisticFitter{}.Fit(data)
+		if err != nil {
+			t.Fatal(err)
+		}
+		l := dist.(Logistic)
+		assertRelative(t, "Mu", l.Mu, 3, tol)
+		assertRelative(t, "Scale", l.Scale, 2, tol)
+	})
+
 	t.Run("Rayleigh", func(t *testing.T) {
 		data := sampleRayleigh(rng, 2, sampleSize)
 		dist, err := RayleighFitter{}.Fit(data)
@@ -232,6 +265,17 @@ func TestFittersRecoverKnownParameters(t *testing.T) {
 			t.Fatal(err)
 		}
 		assertRelative(t, "Scale", dist.(Rayleigh).Scale, 2, tol)
+	})
+
+	t.Run("Pareto", func(t *testing.T) {
+		data := samplePareto(rng, 2.5, 1.5, sampleSize)
+		dist, err := ParetoFitter{}.Fit(data)
+		if err != nil {
+			t.Fatal(err)
+		}
+		p := dist.(Pareto)
+		assertRelative(t, "Shape", p.Shape, 2.5, 0.05)
+		assertRelative(t, "Scale", p.Scale, 1.5, 0.01)
 	})
 }
 
@@ -297,7 +341,9 @@ func TestPDFIntegratesToCDFDifference(t *testing.T) {
 		{"Normal", Normal{Mu: 0, Sigma: 1}, -2, 1.5},
 		{"Exponential", Exponential{Lambda: 0.7}, 0.1, 4},
 		{"Laplace", Laplace{Mu: 0.5, Scale: 1.2}, -4, 6},
+		{"Logistic", Logistic{Mu: 0.5, Scale: 1.2}, -4, 6},
 		{"Rayleigh", Rayleigh{Scale: 1.5}, 0.05, 5},
+		{"Pareto", Pareto{Shape: 2.5, Scale: 1.5}, 1.5, 8},
 		{"LogNormal", LogNormal{Mu: 0.2, Sigma: 0.5}, 0.2, 3},
 		{"Gamma", Gamma{Alpha: 2.5, Beta: 1.5}, 0.1, 9},
 		{"Weibull", Weibull{Shape: 1.8, Scale: 2}, 0.05, 5},
@@ -335,8 +381,9 @@ func TestLogPDFMatchesLogOfPDF(t *testing.T) {
 		Normal{Mu: 1, Sigma: 2},
 		Exponential{Lambda: 1.3},
 		Laplace{Mu: 0.5, Scale: 1.2},
+		Logistic{Mu: 0.5, Scale: 1.2},
+		Pareto{Shape: 2.5, Scale: 0.1},
 		Rayleigh{Scale: 1.5},
-		LogNormal{Mu: 0.1, Sigma: 0.6},
 		Gamma{Alpha: 3, Beta: 2},
 		Weibull{Shape: 2, Scale: 4},
 		Gumbel{Mu: 0, Beta: 1.5},

@@ -116,6 +116,16 @@ func TestNumericalStabilityVeryLargeValues(t *testing.T) {
 			fitter: GumbelFitter{},
 			data:   []float64{1e8, 2e8, 3e8, 4e8, 5e8, 1e9, 2e9, 5e9},
 		},
+		{
+			name:   "Logistic with very large values",
+			fitter: LogisticFitter{},
+			data:   []float64{1e8, 2e8, 3e8, 4e8, 5e8, 1e9, 2e9, 5e9},
+		},
+		{
+			name:   "Pareto with very large values",
+			fitter: ParetoFitter{},
+			data:   []float64{1e8, 2e8, 3e8, 4e8, 5e8, 1e9, 2e9, 5e9},
+		},
 	}
 
 	for _, tt := range tests {

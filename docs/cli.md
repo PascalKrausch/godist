@@ -13,7 +13,7 @@ Der Prototyp liest Dateien und wählt standardmäßig das beste Modell nach AIC 
 | `-decimal` | `.` (Standard) oder `,` für Dezimalkommas |
 | `-all` | Alle Kandidaten vergleichen, inklusive fehlgeschlagener Fits |
 | `-format` | `text` (Standard), `json` oder `plot`; `json` und `plot` erfordern `-all` |
-| `-zero-inflated` | Nullwerte als Zero-Inflated-Modell (Punktmasse bei 0) modellieren. Verglichen werden nur `ZI-`-Kandidaten (Weibull, Gamma, Exponential, LogNormal, Rayleigh). Standard: Fast-Fail-Policy, Kandidaten mit Träger (0, ∞) scheitern bei Nullwerten. Die AIC-Werte beider Modi sind nicht miteinander vergleichbar. |
+| `-zero-inflated` | Nullwerte als Zero-Inflated-Modell (Punktmasse bei 0) modellieren. Verglichen werden nur `ZI-`-Kandidaten (Weibull, Gamma, Exponential, LogNormal, Rayleigh, Pareto). Standard: Fast-Fail-Policy, Kandidaten mit Träger (0, ∞) scheitern bei Nullwerten. Die AIC-Werte beider Modi sind nicht miteinander vergleichbar. |
 
 Unterstützte Eingabeformate sind `.txt` (ein Wert pro Zeile), `.json` (Array von Zahlen) und `.csv` (Semikolon als Trennzeichen; die erste Zeile gilt als Header, wenn sie keine Zahlen enthält).
 

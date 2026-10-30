@@ -21,13 +21,13 @@ from scipy.stats import (
     gamma,
     gumbel_r,
     laplace,
+    logistic,
     lognorm,
     norm,
+    pareto,
     rayleigh,
     weibull_min,
 )
-
-from compare import load_data
 
 REPO = Path(__file__).resolve().parents[1]
 
@@ -49,8 +49,12 @@ def frozen_from_params(name, params):
         return expon(loc=0, scale=1.0 / p["rate"])
     if name == "Laplace":
         return laplace(loc=p["mu"], scale=p["scale"])
+    if name == "Logistic":
+        return logistic(loc=p["mu"], scale=p["scale"])
     if name == "Rayleigh":
         return rayleigh(loc=0, scale=p["scale"])
+    if name == "Pareto":
+        return pareto(p["shape"], loc=0, scale=p["scale"])
     if name == "Beta":
         lo, hi = p["min"], p["max"]
         return beta_dist(p["alpha"], p["beta"], loc=lo, scale=hi - lo)

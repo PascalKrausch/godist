@@ -88,6 +88,30 @@ func TestRegressionFixedDatasets(t *testing.T) {
 			metricsTol: 0.1,
 		},
 		{
+			name:       "Logistic simple dataset",
+			data:       []float64{1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0},
+			fitter:     LogisticFitter{},
+			wantParams: []float64{5.5, 1.748325}, // scipy.stats.logistic.fit
+			wantMetrics: FitMetrics{
+				SampleSize: 10,
+				Discarded:  0,
+			},
+			paramTol:   0.1,
+			metricsTol: 0.1,
+		},
+		{
+			name:       "Pareto simple dataset",
+			data:       []float64{1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0},
+			fitter:     ParetoFitter{},
+			wantParams: []float64{0.6620581867, 1.0}, // scipy.stats.pareto.fit(floc=0)
+			wantMetrics: FitMetrics{
+				SampleSize: 10,
+				Discarded:  0,
+			},
+			paramTol:   1e-6,
+			metricsTol: 0.1,
+		},
+		{
 			name:   "Beta bounded dataset",
 			data:   []float64{0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9},
 			fitter: BetaFitter{},

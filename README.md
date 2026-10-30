@@ -29,7 +29,9 @@
 | Lognormal | `mu`, `sigma` | (0, ∞) |
 | Weibull | `shape`, `scale` | [0, ∞) |
 | Laplace | `mu`, `scale` | ℝ |
+| Logistic | `mu`, `scale` | ℝ |
 | Rayleigh | `scale` | [0, ∞) |
+| Pareto | `shape`, `scale` | [scale, ∞) |
 
 
 ## Methodik
@@ -41,11 +43,12 @@ Die Verteilungen mit positivem Träger behandeln Nullwerte derzeit **streng**: E
 - **LogNormal:** scheitert bei jedem Nullwert, da `log(0)` nicht definiert ist.
 - **Gamma und Weibull:** scheitern bei jedem Nullwert. Die Dichte an der Stelle 0 ist für Formparameter ungleich 1 entweder 0 oder unendlich. Für Formparameter genau 1 entspricht die Verteilung der Exponentialverteilung, die Nullwerte behält.
 - **Rayleigh:** Nullen werden bei der Schätzung ignoriert, die Dichte an der Stelle 0 ist aber 0. Der Kandidat scheitert daher bei jedem Nullwert.
+- **Pareto:** Der Träger beginnt bei `xm = min(x)`, Nullwerte liegen außerhalb des Trägers. Der Kandidat scheitert daher bei jedem Nullwert.
 - **Exponential:** behält Nullwerte; die Dichte an der Stelle 0 ist endlich, der Kandidat ist also nicht betroffen.
-- **Normal, Gumbel, Laplace:** behalten Nullwerte (`CleanDataWithZero`) und sind von dieser Regel nicht betroffen.
+- **Normal, Gumbel, Laplace, Logistic:** behalten Nullwerte (`CleanDataWithZero`) und sind von dieser Regel nicht betroffen.
 - **Beta:** Der Träger wird aus den Daten abgeleitet ( Ob Nullwerte scheitern, entscheidet die Dichteprüfung.
 
-**Negative Werte** werden ebenfalls über die Trägerprüfung behandelt: Exponential, Gamma, Weibull, LogNormal und Rayleigh lehnen jeden negativen Wert mit `ErrNegativeValues` ab. Normal, Gumbel und Laplace sowie Beta (Träger aus den Daten) verarbeiten negative Werte. Alle Kandidaten werten so dieselbe Stichprobe aus.
+**Negative Werte** werden ebenfalls über die Trägerprüfung behandelt: Exponential, Gamma, Weibull, LogNormal, Rayleigh und Pareto lehnen jeden negativen Wert mit `ErrNegativeValues` ab. Normal, Gumbel und Laplace sowie Beta (Träger aus den Daten) verarbeiten negative Werte. Alle Kandidaten werten so dieselbe Stichprobe aus.
 
 Ein fehlgeschlagener Kandidat wird nicht gerankt. Die Nullzahl ist damit ein bewusst sichtbarer Befund und kein stiller Datenverlust.
 

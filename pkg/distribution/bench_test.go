@@ -9,7 +9,7 @@ import (
 // benchSizes sind die Stichprobengrößen für alle Benchmarks; evaluation/bench.py nutzt dieselben.
 var benchSizes = []int{100, 10_000, 1_000_000}
 
-// benchFitters enthält dieselben neun Verteilungen wie evaluation/compare.py.
+// benchFitters enthält dieselben Verteilungen wie evaluation/compare.py.
 var benchFitters = []Fitter{
 	BetaFitter{},
 	ExponentialFitter{},
@@ -19,7 +19,9 @@ var benchFitters = []Fitter{
 	LogNormalFitter{},
 	WeibullFitter{},
 	LaplaceFitter{},
+	LogisticFitter{},
 	RayleighFitter{},
+	ParetoFitter{},
 }
 
 // benchData erzeugt exponentialverteilte Daten aus SplitMix64 (Seed 42) per Inversionsmethode.
@@ -89,7 +91,8 @@ func BenchmarkSelectAllModels(b *testing.B) {
 func selectAllModelsSequential(data []float64) ([]FitResult, []FitFailure, error) {
 	fitters := []Fitter{
 		WeibullFitter{}, LogNormalFitter{}, GammaFitter{}, NormalFitter{}, BetaFitter{},
-		ExponentialFitter{}, GumbelFitter{}, RayleighFitter{}, LaplaceFitter{},
+		ExponentialFitter{}, GumbelFitter{}, RayleighFitter{}, LaplaceFitter{}, LogisticFitter{},
+		ParetoFitter{},
 	}
 	var results []FitResult
 	var failures []FitFailure

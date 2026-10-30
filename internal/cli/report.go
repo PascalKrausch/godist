@@ -328,8 +328,12 @@ func getDistributionName(dist distribution.ContinuousDistribution) string {
 		return "Gumbel"
 	case distribution.Laplace:
 		return "Laplace"
+	case distribution.Logistic:
+		return "Logistic"
 	case distribution.Rayleigh:
 		return "Rayleigh"
+	case distribution.Pareto:
+		return "Pareto"
 	default:
 		return "Unknown"
 	}

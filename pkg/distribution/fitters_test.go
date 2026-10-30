@@ -25,7 +25,9 @@ func TestFittersFitValidData(t *testing.T) {
 		{"LogNormal", LogNormalFitter{}, 2, true},
 		{"Weibull", WeibullFitter{}, 2, true},
 		{"Laplace", LaplaceFitter{}, 2, false},
+		{"Logistic", LogisticFitter{}, 2, false},
 		{"Rayleigh", RayleighFitter{}, 1, true},
+		{"Pareto", ParetoFitter{}, 2, true},
 	}
 
 	for _, tt := range tests {
@@ -86,7 +88,11 @@ func TestFittersRejectInsufficientOrInvalidData(t *testing.T) {
 		{"Weibull needs at least two observations", WeibullFitter{}, []float64{1}},
 		{"Laplace needs at least two observations", LaplaceFitter{}, []float64{1}},
 		{"Laplace needs a positive scale", LaplaceFitter{}, []float64{2, 2, 2}},
+		{"Logistic needs at least two observations", LogisticFitter{}, []float64{1}},
+		{"Logistic needs varying observations", LogisticFitter{}, []float64{2, 2, 2}},
 		{"Rayleigh needs positive observations", RayleighFitter{}, []float64{0, 0}},
+		{"Pareto needs positive observations", ParetoFitter{}, []float64{0, 1, 2}},
+		{"Pareto needs varying observations", ParetoFitter{}, []float64{2, 2, 2}},
 		{"Beta rejects values on specified boundaries", BetaFitter{Min: 0, Max: 1}, []float64{0, 0.3, 0.8}},
 	}
 
@@ -145,6 +151,36 @@ func TestLaplaceFitterClosedForm(t *testing.T) {
 	}
 }
 
+func TestLogisticFitterMLE(t *testing.T) {
+	// Referenzwerte: scipy.stats.logistic.fit (MLE).
+	tests := []struct {
+		name      string
+		data      []float64
+		wantMu    float64
+		wantScale float64
+	}{
+		{"symmetric dataset", []float64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, 5.5, 1.7483251828050477},
+		{"small symmetric dataset", []float64{1, 2, 3, 4}, 2.5, 0.6858941852076591},
+		{"skewed dataset with outlier", []float64{1, 2, 10}, 3.759446011690468, 2.4496358294314975},
+		{"wide dataset with large outlier", []float64{-5, 0.5, 3, 100}, 15.138879400332462, 23.88243928788377},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dist, err := (LogisticFitter{}).Fit(tt.data)
+			if err != nil {
+				t.Fatalf("Fit() error = %v", err)
+			}
+			got, ok := dist.(Logistic)
+			if !ok {
+				t.Fatalf("Fit() returned %T, want Logistic", dist)
+			}
+			assertRelative(t, "Mu", got.Mu, tt.wantMu, 1e-6)
+			assertRelative(t, "Scale", got.Scale, tt.wantScale, 1e-6)
+		})
+	}
+}
+
 func TestRayleighFitterClosedForm(t *testing.T) {
 	// σ = sqrt(sum(x²) / (2n)) = sqrt(16 / 8) = sqrt(2)
 	dist, err := (RayleighFitter{}).Fit([]float64{2, 2, 2, 2})
@@ -156,6 +192,20 @@ func TestRayleighFitterClosedForm(t *testing.T) {
 		t.Fatalf("Fit() returned %T, want Rayleigh", dist)
 	}
 	assertNear(t, "Scale", got.Scale, math.Sqrt2)
+}
+
+func TestParetoFitterClosedForm(t *testing.T) {
+	// xm = min(x) = 1, α = n / Σ ln(x/xm) = 3 / (3·ln 2) = 1/ln 2
+	dist, err := (ParetoFitter{}).Fit([]float64{1, 2, 4})
+	if err != nil {
+		t.Fatalf("Fit() error = %v", err)
+	}
+	got, ok := dist.(Pareto)
+	if !ok {
+		t.Fatalf("Fit() returned %T, want Pareto", dist)
+	}
+	assertNear(t, "Shape", got.Shape, 1/math.Ln2)
+	assertNear(t, "Scale", got.Scale, 1)
 }
 
 // weibullShapeBisection ist die Referenz-Bisektion für den Shape-MLE (vor der Newton-Umstellung).
@@ -229,7 +279,7 @@ func TestWeibullSolverRejectsDegenerateData(t *testing.T) {
 
 func TestPositiveSupportFittersRejectZeros(t *testing.T) {
 	withZero := []float64{0, 0.5, 1.2, 2.3, 3.1, 4.8, 0.9, 1.7}
-	fitters := []Fitter{WeibullFitter{}, GammaFitter{}, RayleighFitter{}, LogNormalFitter{}}
+	fitters := []Fitter{WeibullFitter{}, GammaFitter{}, RayleighFitter{}, LogNormalFitter{}, ParetoFitter{}}
 	for _, f := range fitters {
 		if _, err := f.Fit(withZero); err == nil {
 			t.Errorf("%s.Fit() accepted data containing 0, want failure", f.Name())

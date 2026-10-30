@@ -31,13 +31,13 @@ from scipy.stats import (
     gamma,
     gumbel_r,
     laplace,
+    logistic,
     lognorm,
     norm,
+    pareto,
     rayleigh,
     weibull_min,
 )
-
-from compare import describe_scipy, fit_scipy, load_data
 
 REPO = Path(__file__).resolve().parents[1]
 SIZES = [100, 10_000, 1_000_000]
@@ -45,7 +45,7 @@ SEED = 42
 GOLDEN_GAMMA = 0x9E3779B97F4A7C15
 NAMES = [
     "Beta", "Exponential", "Normal", "Gumbel", "Gamma",
-    "LogNormal", "Weibull", "Laplace", "Rayleigh",
+    "LogNormal", "Weibull", "Laplace", "Logistic", "Rayleigh", "Pareto",
 ]
 
 
@@ -82,7 +82,9 @@ FIT_CALLS = {
     "LogNormal": lambda d: lognorm.fit(d, floc=0),
     "Weibull": lambda d: weibull_min.fit(d, floc=0),
     "Laplace": lambda d: laplace.fit(d),
+    "Logistic": lambda d: logistic.fit(d),
     "Rayleigh": lambda d: rayleigh.fit(d, floc=0),
+    "Pareto": lambda d: pareto.fit(d, floc=0),
 }
 
 

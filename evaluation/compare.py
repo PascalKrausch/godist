@@ -15,8 +15,10 @@ from scipy.stats import (
     gumbel_r,
     kurtosis,
     laplace,
+    logistic,
     lognorm,
     norm,
+    pareto,
     rayleigh,
     skew,
     weibull_min,
@@ -218,6 +220,14 @@ def fit_scipy(name, data):
         params = {"mu": mu, "scale": scale}
         k = 2
 
+    elif name == "Logistic":
+        # Go-Fitter: MLE über die Score-Gleichungen, identisch zu scipy.stats.logistic.fit.
+        mu, scale = logistic.fit(data)
+        loglik = np.sum(logistic.logpdf(data, loc=mu, scale=scale))
+        cdf = lambda x: logistic.cdf(x, loc=mu, scale=scale)
+        params = {"mu": mu, "scale": scale}
+        k = 2
+
     elif name == "Rayleigh":
         if np.any(data <= 0):
             raise ValueError("Rayleigh mit loc=0 benötigt positive Daten")
@@ -226,6 +236,15 @@ def fit_scipy(name, data):
         cdf = lambda x: rayleigh.cdf(x, loc=0, scale=scale)
         params = {"scale": scale}
         k = 1
+
+    elif name == "Pareto":
+        if np.any(data <= 0):
+            raise ValueError("Pareto mit loc=0 benötigt positive Daten")
+        shape, _, scale = pareto.fit(data, floc=0)
+        loglik = np.sum(pareto.logpdf(data, shape, loc=0, scale=scale))
+        cdf = lambda x: pareto.cdf(x, shape, loc=0, scale=scale)
+        params = {"shape": shape, "scale": scale}
+        k = 2
 
     elif name == "Beta":
         # Dieselbe automatische Randkonvention wie im Go-BetaFitter:
@@ -327,7 +346,7 @@ def main():
     for name in [
         "Gumbel", "Beta", "LogNormal", "Gamma",
         "Normal", "Weibull", "Exponential",
-        "Laplace", "Rayleigh",
+        "Laplace", "Logistic", "Rayleigh", "Pareto",
     ]:
         try:
             scipy_results[name] = fit_scipy(name, data)
