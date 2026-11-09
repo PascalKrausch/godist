@@ -4,7 +4,7 @@ Zur Evaluation der Implementierungen wurde die Python-Bibliothek SciPy als Refer
 
 ## Vergleich mit SciPy
 
-`evaluation/compare.py` vergleicht alle neun Verteilungen mit SciPy. Das Skript muss aus dem Repository-Wurzelverzeichnis gestartet werden, da es `go run ./cmd/distfit` aufruft:
+`evaluation/compare.py` vergleicht alle 14 implementierten Verteilungen mit SciPy. Das Skript muss aus dem Repository-Wurzelverzeichnis gestartet werden, da es `go run ./cmd/distfit` aufruft:
 
 ```bash
 evaluation/.venv/bin/python evaluation/compare.py --path=testdata/winequality-red.csv --column=density

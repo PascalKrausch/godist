@@ -179,8 +179,14 @@ func extractNumericArrays(v any) []any {
 			}
 		}
 	case map[string]any:
-		for _, item := range val {
-			if result := extractNumericArrays(item); len(result) > 0 {
+		// Schlüssel sortiert durchsuchen, damit das gewählte Array nicht zufällig ist
+		keys := make([]string, 0, len(val))
+		for key := range val {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		for _, key := range keys {
+			if result := extractNumericArrays(val[key]); len(result) > 0 {
 				return result
 			}
 		}

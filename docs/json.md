@@ -2,18 +2,28 @@
 
 JSON wird im aktuellen Prototyp nur mit `-all -format=json` ausgegeben. Der nächste Schritt ist, das JSON-Format als stabile Schnittstelle zu definieren und zu testen. Es soll mindestens Eingabemetadaten, Stichprobengröße, Auswahlkriterium, erfolgreiche Modelle, benannte Parameter, Metriken und fehlgeschlagene Fits enthalten.
 
-Beispiel für die geplante Verwendung:
+Aufruf:
 
 ```bash
-godist fit measurements.csv --column wind_speed_10m --format json
+distfit -file=measurements.csv -column=wind_speed_10m -all -format=json
 ```
 
 Bei JSON-Ausgabe gehört ausschließlich das JSON-Dokument auf `stdout`; Statusmeldungen und Fehler gehören auf `stderr`. So lässt sich die Ausgabe zuverlässig an andere Werkzeuge weiterleiten.
+
+## Vertrag
+
+Der verbindliche Vertrag ist [`json.schema.json`](json.schema.json) (JSON Schema, Draft 2020-12). Die Tests in `cmd/distfit/json_schema_test.go` prüfen die CLI-Ausgabe dagegen.
+
+- `schema_version` ist immer vorhanden (aktuell `1`). Neue optionale Felder sind nicht-brechend; Umbenennungen oder Entfernungen erhöhen die Version.
+- `failures` ist immer vorhanden (ggf. leeres Array).
+- Nicht berechenbare deskriptive Kennzahlen sind `null`.
+- Ist ein Wert nicht darstellbar (NaN/Inf), gibt es keine Teilausgabe: stdout bleibt leer, Exit-Code 1.
 
 ## Beispiel
 
 ```json
 {
+  "schema_version": 1,
   "input": "daten.csv",
   "column": "density",
   "sample_size": 1000,
@@ -50,65 +60,104 @@ Bei JSON-Ausgabe gehört ausschließlich das JSON-Dokument auf `stdout`; Statusm
 
 ## Verwendung in anderen Projekten
 
+Die Beispiele sind geprüft: Das Go-Beispiel wird kompiliert, das TypeScript-Beispiel typgeprüft und der Python-Client läuft in der CI (`consumers/python/test_json_contract.py`).
+
 ### Go
 
+Die Pakete `internal/...` lassen sich von anderen Modulen nicht importieren. Typen deshalb im eigenen Projekt definieren:
+
 ```go
-type FitReport struct {
-    Input            string                    `json:"input"`
-    Column           string                    `json:"column,omitempty"`
-    SampleSize       int                       `json:"sample_size"`
-    Discarded        int                       `json:"discarded"`
-    Candidates       int                       `json:"candidates"`
-    BestDistribution string                    `json:"best_distribution,omitempty"`
-    Models           []FitRow                  `json:"models"`
-    Failures         []distribution.FitFailure `json:"failures,omitempty"`
-    Descriptive      stats.Summary             `json:"descriptive"`
+type FitRow struct {
+    Name        string             `json:"name"`
+    Params      map[string]float64 `json:"params"`
+    AIC         float64            `json:"aic"`
+    DeltaAIC    float64            `json:"delta_aic"`
+    BIC         float64            `json:"bic"`
+    KSStatistic float64            `json:"ks_statistic"`
+    RMSE        float64            `json:"rmse"`
 }
 
-var report FitReport
-json.Unmarshal(output, &report)
+type Failure struct {
+    Name  string `json:"name"`
+    Error string `json:"error"`
+}
+
+// Nicht berechenbare Kennzahlen sind null und werden deshalb als Zeiger gelesen.
+type Descriptive struct {
+    N        int      `json:"n"`
+    Mean     *float64 `json:"mean"`
+    Median   *float64 `json:"median"`
+    Variance *float64 `json:"variance"`
+    StdDev   *float64 `json:"std_dev"`
+    Min      *float64 `json:"min"`
+    Q1       *float64 `json:"q1"`
+    Q3       *float64 `json:"q3"`
+    Max      *float64 `json:"max"`
+    Skewness *float64 `json:"skewness"`
+    Kurtosis *float64 `json:"kurtosis"`
+}
+
+type FitReport struct {
+    SchemaVersion    int         `json:"schema_version"`
+    Input            string      `json:"input"`
+    Column           string      `json:"column,omitempty"`
+    SampleSize       int         `json:"sample_size"`
+    Discarded        int         `json:"discarded"`
+    Candidates       int         `json:"candidates"`
+    BestDistribution string      `json:"best_distribution,omitempty"`
+    Descriptive      Descriptive `json:"descriptive"`
+    Models           []FitRow    `json:"models"`
+    Failures         []Failure   `json:"failures"`
+}
+
+func main() {
+    out, err := exec.Command("distfit", "-file=daten.csv", "-column=density", "-all", "-format=json").Output()
+    if err != nil {
+        fmt.Fprintln(os.Stderr, err)
+        os.Exit(1)
+    }
+    var report FitReport
+    if err := json.Unmarshal(out, &report); err != nil {
+        panic(err)
+    }
+    if report.SchemaVersion != 1 {
+        panic("unsupported schema_version")
+    }
+    fmt.Println(report.BestDistribution, report.Models[0].Params)
+}
 ```
 
 ### Python
 
+Der Client liegt in [`consumers/python/distfit_client.py`](../consumers/python/distfit_client.py) und wird in der CI getestet. Er ignoriert unbekannte Felder und lehnt unbekannte `schema_version`-Werte ab.
+
 ```python
-from dataclasses import dataclass
-from typing import Dict, List
+from distfit_client import run_distfit
+
+report = run_distfit("distfit", ["-file=daten.csv", "-column=density", "-all", "-format=json"])
+
+best = report.models[0]
+print(report.best_distribution, best.params, best.aic)
+```
+
+Ohne den Client, nur mit der Standardbibliothek:
+
+```python
 import json
-
-@dataclass
-class FitRow:
-    name: str
-    params: Dict[str, float]
-    aic: float
-    delta_aic: float
-    bic: float
-    ks_statistic: float
-    rmse: float
-
-@dataclass
-class FitReport:
-    input: str
-    column: str
-    sample_size: int
-    discarded: int
-    candidates: int
-    best_distribution: str
-    models: List[FitRow]
-    failures: List[dict]
-
-report = FitReport(**json.loads(result.stdout))
+import subprocess
 
 result = subprocess.run(
-    ["distfit", "-file=daten.csv", "-all", "-format=json"],
+    ["distfit", "-file=daten.csv", "-column=density", "-all", "-format=json"],
     capture_output=True,
-    text=True
+    text=True,
 )
-report = json.loads(result.stdout)
+if result.returncode != 0:
+    raise RuntimeError(result.stderr)
 
+report = json.loads(result.stdout)
+assert report["schema_version"] == 1
 best_model = report["best_distribution"]
 params = report["models"][0]["params"]
-aic = report["models"][0]["aic"]
 ```
 
 ### TypeScript
@@ -124,16 +173,41 @@ interface FitRow {
   rmse: number;
 }
 
+interface Failure {
+  name: string;
+  error: string;
+}
+
+// Nicht berechenbare Kennzahlen sind null.
+interface Descriptive {
+  n: number;
+  mean: number | null;
+  median: number | null;
+  variance: number | null;
+  std_dev: number | null;
+  min: number | null;
+  q1: number | null;
+  q3: number | null;
+  max: number | null;
+  skewness: number | null;
+  kurtosis: number | null;
+}
+
 interface FitReport {
+  schema_version: 1;
   input: string;
   column?: string;
   sample_size: number;
   discarded: number;
   candidates: number;
   best_distribution?: string;
+  descriptive: Descriptive;
   models: FitRow[];
-  failures?: any[];
+  failures: Failure[];
 }
 
-const report: FitReport = JSON.parse(output);
+const report = JSON.parse(output) as FitReport;
+if (report.schema_version !== 1) {
+  throw new Error("unsupported schema_version");
+}
 ```

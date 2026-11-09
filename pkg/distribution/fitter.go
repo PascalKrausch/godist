@@ -108,7 +108,12 @@ func SelectBestModel(data []float64) (ContinuousDistribution, FitMetrics, error)
 }
 
 func SelectBestModelWithPolicy(data []float64, policy ZeroPolicy) (ContinuousDistribution, FitMetrics, error) {
-	results, _, err := SelectAllModelsWithPolicy(data, policy)
+	return SelectBestModelFromFitters(data, candidateFitters(policy))
+}
+
+// SelectBestModelFromFitters wählt unter den gegebenen Fittern das Modell mit dem kleinsten AIC.
+func SelectBestModelFromFitters(data []float64, fitters []Fitter) (ContinuousDistribution, FitMetrics, error) {
+	results, _, err := SelectAllModelsFromFitters(data, fitters)
 	if err != nil {
 		return nil, FitMetrics{}, err
 	}
@@ -135,35 +140,24 @@ func SelectAllModels(data []float64) ([]FitResult, []FitFailure, error) {
 
 // candidateFitters liefert die Kandidaten für die gewählte Nullwert-Policy.
 func candidateFitters(policy ZeroPolicy) []Fitter {
-	if policy == PolicyZeroInflated {
-		positive := []Fitter{ExponentialFitter{}, GammaFitter{}, WeibullFitter{}, LogNormalFitter{}, RayleighFitter{}, ParetoFitter{}, ChiSquareFitter{}}
-		fitters := make([]Fitter, len(positive))
-		for i, base := range positive {
-			fitters[i] = ZeroInflatedFitter{Base: base}
+	var fitters []Fitter
+	for _, spec := range Catalog() {
+		switch {
+		case policy != PolicyZeroInflated:
+			fitters = append(fitters, spec.Fitter)
+		case spec.ZeroInflatable:
+			fitters = append(fitters, ZeroInflatedFitter{Base: spec.Fitter})
 		}
-		return fitters
 	}
-	return []Fitter{
-		WeibullFitter{},
-		LogNormalFitter{},
-		GammaFitter{},
-		NormalFitter{},
-		BetaFitter{},
-		ExponentialFitter{},
-		GumbelFitter{},
-		RayleighFitter{},
-		LaplaceFitter{},
-		LogisticFitter{},
-		ParetoFitter{},
-		ChiSquareFitter{},
-		CauchyFitter{},
-		StudentTFitter{},
-	}
+	return fitters
 }
 
 func SelectAllModelsWithPolicy(data []float64, policy ZeroPolicy) ([]FitResult, []FitFailure, error) {
-	fitters := candidateFitters(policy)
+	return SelectAllModelsFromFitters(data, candidateFitters(policy))
+}
 
+// SelectAllModelsFromFitters fittet alle gegebenen Fitter parallel und trennt Ergebnisse von Fehlschlägen.
+func SelectAllModelsFromFitters(data []float64, fitters []Fitter) ([]FitResult, []FitFailure, error) {
 	// Jede Verteilung läuft in einer eigenen Goroutine; Slots pro Index halten die Reihenfolge von fitters bei.
 	outcomes := make([]fitOutcome, len(fitters))
 	var wg sync.WaitGroup

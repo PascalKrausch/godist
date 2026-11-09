@@ -5,7 +5,7 @@
 > **Projektstatus: noch nicht produktiv verwenden.**
 > Vor einem produktiven Einsatz müssen insbesondere Parameterschätzung, numerische Stabilität, Gütemaße, Eingabevalidierung und Testabdeckung systematisch überprüft werden.
 >
-> **Aktueller Stand:** Neun Verteilungen sind implementiert. Die Tests in `pkg/distribution`, `internal/cli` und `cmd/distfit` laufen grün (`go test ./...`). Der CLI-Prototyp verarbeitet reale Datensätze (z. B. `winequality-red.csv`). Nullwerte werden strikt behandelt (siehe [Methodik])
+> **Aktueller Stand:** 14 Verteilungen sind implementiert. Die Tests in `pkg/distribution`, `internal/cli` und `cmd/distfit` laufen grün (`go test ./...`). Der CLI-Prototyp verarbeitet reale Datensätze (z. B. `winequality-red.csv`). Nullwerte werden strikt behandelt (siehe [Methodik])
 
 ## Ziele
 
@@ -112,20 +112,29 @@ Getestet werden unter anderem
 
 ### CLI und Einleselogik
 
-- Unterbefehle fit und list distributions müssen noch implementiert werden
-- Einzelne Verteilung erzwingen ist noch nicht möglich
+Der Unterbefehl `fit`, `list distributions` sowie die Flags `-distribution`, `-include` und `-exclude` sind implementiert (siehe [docs/cli.md](docs/cli.md)). Noch offen:
+
+- JSON-Schema für `list distributions -format=json`.
+- Python-Consumer-Test für `--distribution` und `-include`/`-exclude` in `consumers/python/`.
+- Golden-Test für die Textausgabe von `list distributions`.
 
 ### Weitere Verteilungen
 
-- LogLogistic und GEV sind weiterhin geplant
+Geplant sind derzeit:
+
+- Generalized Extreme value (GEV)
+- SkewNormal
+- LogLogistic
+- Inverse Gaussian
+- Generalized Gamma
+- Burr XII
 
 ### Dokumentation
 
 - README-Beispiele mit tatsächlich ausführbaren Befehlen synchron halten.
 - Parameterkonventionen und Support jeder Verteilung dokumentieren.
-- Grenzen von AIC, BIC, KS und RMSE erklären (siehe [methodik.md](methodik.md)).
+- Grenzen von AIC, BIC, KS und RMSE erklären (siehe [Methodik](#methodik)).
 - Versionierung und kompatible Änderungen der Bibliotheks-API festlegen.
-- CI für Tests, Formatierung und gegebenenfalls statische Analyse ergänzen.
 - Erst nach bestandenen Validierungs- und Regressionstests einen produktiven Einsatz empfehlen.
 
 
@@ -151,9 +160,9 @@ go test -bench=. -benchmem ./...
 | Thema | Datei |
 |---|---|
 | Architektur, Verzeichnisstruktur und Kerninterfaces | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
-| CLI: Flags, Eingabeformate, Mindeststichprobe, Zielinterface | [docs/CLI.md](docs/CLI.md) |
-| JSON-Ausgabe und Einbindung in Go, Python, TypeScript | [docs/JSON.md](docs/JSON.md) |
-| Evaluation: Vergleich mit SciPy, Benchmarks | [docs/EVALUATION.md](docs/EVALUATION.md) |
+| CLI: Flags, Eingabeformate, Mindeststichprobe, Zielinterface | [docs/cli.md](docs/cli.md) |
+| JSON-Ausgabe und Einbindung in Go, Python, TypeScript | [docs/json.md](docs/json.md) |
+| Evaluation: Vergleich mit SciPy, Benchmarks | [docs/evaluation.md](docs/evaluation.md) |
 | Roadmap und nächste Schritte | [docs/roadmap.md](docs/roadmap.md) |
 
 ## Grundsatz

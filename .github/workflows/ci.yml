@@ -48,6 +48,30 @@ jobs:
       
       
 
+  json-consumers:
+    # Prüft die JSON-Ausgabe aus Sicht eines Python-Consumers (Schema + Client).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Go einrichten
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Python einrichten
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: consumers/python/requirements.txt
+
+      - name: Python-Abhängigkeiten installieren
+        run: pip install -r consumers/python/requirements.txt
+
+      - name: JSON-Vertrag prüfen
+        run: python -m unittest discover -s consumers/python -v
+
   benchmark:
     # Nur manuell oder wöchentlich: Laufzeiten auf Shared Runnern schwanken, daher kein Gate.
     if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'

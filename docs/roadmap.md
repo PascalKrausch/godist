@@ -1,6 +1,6 @@
 # Roadmap
 
-Die Arbeit sollte zunächst die Zuverlässigkeit der vorhandenen Verteilungen absichern und anschließend die CLI und den Verteilungskatalog ausbauen. Das Zielinterface der CLI ist in [cli.md](cli.md#geplantes-zielinterface) beschrieben.
+Die Arbeit sollte zunächst die Zuverlässigkeit der vorhandenen Verteilungen absichern und anschließend die CLI und den Verteilungskatalog ausbauen. Der aktuelle CLI-Umfang und die geplanten Erweiterungen sind in [cli.md](cli.md#geplant) beschrieben.
 
 ## 1. Statistischen Kern validieren — höchste Priorität
 
@@ -30,7 +30,7 @@ Ungültige Werte sollen nicht stillschweigend verschwinden. Die CLI soll anzeige
 
 ## 3. Automatisierte Tests ausbauen
 
-- Unit-Tests für alle neun Verteilungen und Fitter sind in `pkg/distribution` vorhanden; ergänzt werden Grenzfälle gemäß Punkt 2.
+- Unit-Tests für alle 14 Verteilungen und Fitter sind in `pkg/distribution` vorhanden; ergänzt werden Grenzfälle gemäß Punkt 2.
 - Eigenschaften testen: CDF ist monoton und liegt in `[0, 1]`; PDF ist auf dem Support nicht negativ; LogPDF stimmt numerisch mit `log(PDF)` überein, soweit die Dichte nicht unterläuft.
 - Geeignete numerische Integrations- und Grenzwerttests für die Dichte implementieren.
 - Regressionstests mit festen Beispieldatensätzen und erwarteten Ergebnissen ergänzen.
@@ -40,15 +40,13 @@ Ungültige Werte sollen nicht stillschweigend verschwinden. Die CLI soll anzeige
 
 ## 4. CLI und Einleselogik vervollständigen
 
-- Unterbefehle `fit` und `list distributions` implementieren.
-- `--column` nach Spaltenname und – wenn sinnvoll – nach Index unterstützen.
-- CSV-Dateien mit mehreren numerischen Spalten niemals ungefragt zu einem einzigen Datensatz vermischen.
-- Für mehrdeutige Eingaben eine klare Fehlermeldung mit verfügbaren Spalten anzeigen.
-- Unterstützung für Standard-Input (`-`) und klare Regeln für leere Zeilen, Header, Trennzeichen und Dezimalformate ergänzen.
-- `--distribution` zum Fit einer einzelnen Verteilung anbieten.
-- Fehler und Warnungen verständlich ausgeben und geeignete Exit-Codes definieren.
-- Ausgabeparameter mit stabilen, verteilungsspezifischen Namen bereitstellen.
-- JSON-Schema dokumentieren und mit Tests gegen unbeabsichtigte Änderungen absichern (siehe [json.md](json.md)).
+Umgesetzt: Unterbefehle `fit` und `list distributions`, `--column` nach Spaltenname und Index, klare Fehlermeldung bei mehrdeutigen CSV-Spalten, `--distribution`, `--include`/`--exclude`, definierte Exit-Codes, JSON-Schema (`docs/json.schema.json`, siehe [json.md](json.md)) und stabilen Parameternamen über `ParamNames()`.
+
+Noch offen:
+
+- Unterstützung für Standard-Input (`-`) und klare Regeln für leere Zeilen, Header, Trennzeichen und Dezimalformate.
+- Golden-Test für die Textausgabe von `list distributions`.
+- Python-Consumer-Test für `--distribution` und `-include`/`-exclude` in `consumers/python/`.
 
 ## 5. Neue Verteilungen priorisiert hinzufügen
 
@@ -56,10 +54,9 @@ Mögliche Erweiterungen:
 
 | Priorität | Verteilungen | Hinweise |
 |---|---|---|
-| Früh | Logistic | Ergänzt symmetrische Modelle mit unterschiedlichen Tail-Eigenschaften. |
-| Früh bis mittel | Log-logistisch, Pareto | Nützlich für positive Daten und schwere rechte Tails. |
-| Mittel | Student-t (umgesetzt) | Symmetrisch mit einstellbarer Tail-Schwere; ν per Profil-Likelihood auf [0.1, 10⁴] begrenzt. |
-| Mittel | Chi-Quadrat | Spezialfälle beziehungsweise eng mit vorhandenen Familien verwandt; als eigener Verteilungstyp dennoch praktisch. |
+| Erledigt | Logistic, Pareto, Chi-Quadrat | Unter den 14 implementierten Verteilungen. |
+| Erledigt | Student-t | Symmetrisch mit einstellbarer Tail-Schwere; ν per Profil-Likelihood auf [0.1, 10⁹] begrenzt. |
+| Offen | Log-logistisch | Nützlich für positive Daten und schwere rechte Tails. |
 | Später | Generalized Extreme Value (GEV) | Wertvoll für Extremwertanalysen, aber mit parameterabhängigem Support und anspruchsvoller numerischer Optimierung. |
 
 Jede neue Verteilung benötigt neben PDF/CDF/LogPDF auch einen validierten Fitter, dokumentierte Parameter und Support-Bedingungen sowie eigene Tests. Die Implementierung über `ContinuousDistribution` allein reicht nicht aus, um die Qualität der Parameterschätzung sicherzustellen.
@@ -79,57 +76,11 @@ Performanceoptimierungen sollen auf Benchmarks beruhen und erst nach der fachlic
 
 - README-Beispiele mit tatsächlich ausführbaren Befehlen synchron halten.
 - Parameterkonventionen und Support jeder Verteilung dokumentieren.
-- Grenzen von AIC, BIC, KS und RMSE erklären (siehe [methodik.md](methodik.md)).
+- Grenzen von AIC, BIC, KS und RMSE erklären (siehe [Methodik in der README](../README.md#methodik)).
 - Versionierung und kompatible Änderungen der Bibliotheks-API festlegen.
-- CI für Tests, Formatierung und gegebenenfalls statische Analyse ergänzen.
 - Erst nach bestandenen Validierungs- und Regressionstests einen produktiven Einsatz empfehlen.
 
-## Erledigt
+## Status
 
-### Datenvalidierung und Edge-Cases
-
-Getestet werden unter anderem 
-
-- Leere Daten
-- Konstante Daten
-- NaN, Inf und 0.0
-- Werte außerhalb des Supports
-- Sehr kleine und große Werte
-- Numerischer Über- und Unterlauf
-
-### Tests
-
-- Unit-Tests für alle bisher unterstützten Verteilungen 
-- Eigenschaftstests (CDF monoton, PDF ≥ 0, LogPDF = log(PDF))
-- Numerische Integrationstests
-- Regressionstests
-- Modellranking-Tests
-- CLI-Tests
-- CI-Pipeline integriert
-
-### Performancemessungen und Optimierungen
-
-- Benchmarks für alle Fitter und vollständigen Modellvergleich mit synthetischen Datensätzen
-- Beta-Fitter von 82 allocs/op auf 70 allocs/ops optimiert
-- Weibull von Bisektionsverfahren (konvergiert linear) auf Newton-Raphson (konvergiert quadratisch) umgestellt. Bisektion wird als Fallback beibehalten
-
-## To-Do
-
-### CLI und Einleselogik
-
-- Unterbefehle fit und list distributions müssen noch implementiert werden
-- Einzelne Verteilung erzwingen ist noch nicht möglich
-
-### Weitere Verteilungen
-
-- LogLogistic und GEV sind weiterhin geplant
-
-### Dokumentation
-
-- README-Beispiele mit tatsächlich ausführbaren Befehlen synchron halten.
-- Parameterkonventionen und Support jeder Verteilung dokumentieren.
-- Grenzen von AIC, BIC, KS und RMSE erklären (siehe [methodik.md](methodik.md)).
-- Versionierung und kompatible Änderungen der Bibliotheks-API festlegen.
-- CI für Tests, Formatierung und gegebenenfalls statische Analyse ergänzen.
-- Erst nach bestandenen Validierungs- und Regressionstests einen produktiven Einsatz empfehlen.
+Der aktuelle Bearbeitungsstand — erledigte Punkte, Testabdeckung, Benchmarks und offene Aufgaben — wird in der [README](../README.md) gepflegt. Die Abschnitte „Erledigt" und „To-Do" dort sind die kanonische Quelle; dieses Dokument beschreibt nur die thematische Einordnung und die verbleibenden Vorhaben.
 

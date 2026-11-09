@@ -112,10 +112,10 @@ func (f StudentTFitter) Name() string {
 const (
 	studentTNuMin = 0.1
 	studentTNuMax = 1e9
-	studentTEMTol = 1e-9
+	studentTEMTol = 1e-7
 	studentTEMMax = 5000
-	// studentTNuTol ist die Toleranz auf log(ν) der Golden-Section-Suche (relative Genauigkeit von ν ca. 1e-6).
-	studentTNuTol = 1e-6
+	// studentTNuTol ist die Toleranz auf log(ν) der Golden-Section-Suche (relative Genauigkeit von ν ca. 1e-4).
+	studentTNuTol = 1e-4
 )
 
 // studentTLogLik summiert die Log-Likelihood. Die normierende Konstante wird einmal berechnet,

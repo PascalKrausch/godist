@@ -25,8 +25,13 @@ type FitRow struct {
 	RMSE        float64            `json:"rmse"`
 }
 
+// JSONSchemaVersion ist die Version des JSON-Vertrags (docs/json.schema.json).
+// Nicht-brechende Erweiterungen behalten die Version; Umbenennungen oder Entfernungen erhöhen sie.
+const JSONSchemaVersion = 1
+
 // FitReport enthält die zusammengefassten Ergebnisse eines Verteilungsfits.
 type FitReport struct {
+	SchemaVersion    int                       `json:"schema_version"`
 	Input            string                    `json:"input"`
 	Column           string                    `json:"column,omitempty"`
 	SampleSize       int                       `json:"sample_size"`
@@ -35,7 +40,7 @@ type FitReport struct {
 	BestDistribution string                    `json:"best_distribution,omitempty"`
 	Descriptive      stats.Summary             `json:"descriptive"`
 	Models           []FitRow                  `json:"models"`
-	Failures         []distribution.FitFailure `json:"failures,omitempty"`
+	Failures         []distribution.FitFailure `json:"failures"`
 }
 
 // Öffentliche Berichtsfunktionen
@@ -43,14 +48,19 @@ type FitReport struct {
 // BuildFitReport erstellt einen Bericht aus erfolgreichen Fits und Fehlern.
 // sampleSize ist die Anzahl verwendeter Werte, discarded die Anzahl verworfener Eingaben.
 func BuildFitReport(results []distribution.FitResult, failures []distribution.FitFailure, input string, column string, descriptive stats.Summary, discarded int) FitReport {
+	if failures == nil {
+		failures = []distribution.FitFailure{}
+	}
+
 	report := FitReport{
-		Input:       input,
-		Column:      column,
-		SampleSize:  descriptive.N,
-		Discarded:   discarded,
-		Descriptive: descriptive,
-		Models:      make([]FitRow, 0, len(results)),
-		Failures:    failures,
+		SchemaVersion: JSONSchemaVersion,
+		Input:         input,
+		Column:        column,
+		SampleSize:    descriptive.N,
+		Discarded:     discarded,
+		Descriptive:   descriptive,
+		Models:        make([]FitRow, 0, len(results)),
+		Failures:      failures,
 	}
 
 	for _, result := range results {
@@ -311,7 +321,9 @@ func writeTable(
 
 // getDistributionName liefert den Anzeigenamen einer Verteilung.
 func getDistributionName(dist distribution.ContinuousDistribution) string {
-	switch dist.(type) {
+	switch d := dist.(type) {
+	case distribution.ZeroInflated:
+		return "ZI-" + getDistributionName(d.Base)
 	case distribution.Weibull:
 		return "Weibull"
 	case distribution.LogNormal:

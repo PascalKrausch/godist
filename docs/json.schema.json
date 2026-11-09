@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/PascalKrausch/godist/docs/json.schema.json",
+  "title": "godist fit report",
+  "description": "Vertrag der JSON-Ausgabe von distfit -all -format=json. Version siehe schema_version. Neue optionale Felder sind nicht-brechend; Umbenennungen oder Entfernungen erhöhen schema_version.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "input",
+    "sample_size",
+    "discarded",
+    "candidates",
+    "descriptive",
+    "models",
+    "failures"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "input": {
+      "type": "string"
+    },
+    "column": {
+      "type": "string",
+      "description": "Nur vorhanden, wenn eine Spalte gewählt wurde."
+    },
+    "sample_size": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "discarded": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "candidates": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "best_distribution": {
+      "type": "string",
+      "description": "Name des Modells mit dem kleinsten AIC. Nur vorhanden, wenn mindestens ein Modell angepasst wurde."
+    },
+    "descriptive": {
+      "type": "object",
+      "required": ["n", "mean", "median", "variance", "std_dev", "min", "q1", "q3", "max", "skewness", "kurtosis"],
+      "properties": {
+        "n": { "type": "integer", "minimum": 0 },
+        "mean": { "$ref": "#/$defs/nullableNumber" },
+        "median": { "$ref": "#/$defs/nullableNumber" },
+        "variance": { "$ref": "#/$defs/nullableNumber" },
+        "std_dev": { "$ref": "#/$defs/nullableNumber" },
+        "min": { "$ref": "#/$defs/nullableNumber" },
+        "q1": { "$ref": "#/$defs/nullableNumber" },
+        "q3": { "$ref": "#/$defs/nullableNumber" },
+        "max": { "$ref": "#/$defs/nullableNumber" },
+        "skewness": { "$ref": "#/$defs/nullableNumber" },
+        "kurtosis": { "$ref": "#/$defs/nullableNumber" }
+      }
+    },
+    "models": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/model" }
+    },
+    "failures": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "error"],
+        "properties": {
+          "name": { "type": "string" },
+          "error": { "type": "string" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "nullableNumber": {
+      "type": ["number", "null"],
+      "description": "null, wenn die Kennzahl nicht berechenbar ist (NaN/Inf)."
+    },
+    "model": {
+      "type": "object",
+      "required": ["name", "params", "aic", "delta_aic", "bic", "ks_statistic", "rmse"],
+      "properties": {
+        "name": { "type": "string" },
+        "params": {
+          "type": "object",
+          "additionalProperties": { "type": "number" }
+        },
+        "aic": { "type": "number" },
+        "delta_aic": { "type": "number", "minimum": 0 },
+        "bic": { "type": "number" },
+        "ks_statistic": { "type": "number", "minimum": 0 },
+        "rmse": { "type": "number", "minimum": 0 }
+      }
+    }
+  }
+}

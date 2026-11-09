@@ -169,14 +169,16 @@ func TestReadDatasetNestedJSON(t *testing.T) {
 }
 
 func TestReadDatasetNestedJSONMultipleArrays(t *testing.T) {
-	// Test mit mehreren numerischen Arrays - sollte das erste finden
+	// Test mit mehreren numerischen Arrays - sollte das Array des alphabetisch ersten Schlüssels finden.
+	// Mehrfach lesen, weil Map-Iteration in Go zufällig ist.
 	path := writeTempFile(t, "d.json", `{"a":[1,2],"b":[3,4]}`)
-	ds, err := ReadDataset(path, ReadOptions{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Das Ergebnis sollte das erste Array sein ([1,2])
-	if want := []float64{1, 2}; !reflect.DeepEqual(ds.Values, want) {
-		t.Fatalf("Values = %v, want %v", ds.Values, want)
+	for i := 0; i < 50; i++ {
+		ds, err := ReadDataset(path, ReadOptions{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := []float64{1, 2}; !reflect.DeepEqual(ds.Values, want) {
+			t.Fatalf("Durchlauf %d: Values = %v, want %v", i, ds.Values, want)
+		}
 	}
 }
