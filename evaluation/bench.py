@@ -42,6 +42,7 @@ from scipy.stats import (
     weibull_min,
 )
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from evaluation.compare import describe_scipy, fit_scipy, load_data
 
 REPO = Path(__file__).resolve().parents[1]
