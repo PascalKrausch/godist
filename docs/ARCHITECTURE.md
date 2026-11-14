@@ -27,6 +27,7 @@
 │       ├── gumbel.go
 │       ├── laplace.go
 │       ├── logistic.go
+│       ├── loglogistic.go
 │       ├── log_normal.go
 │       ├── numerical_stability_test.go
 │       ├── cauchy.go

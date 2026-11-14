@@ -11,6 +11,7 @@ import pandas as pd
 from scipy.stats import (
     beta as beta_dist,
     expon,
+    fisk,
     gamma,
     gumbel_r,
     kurtosis,
@@ -231,6 +232,18 @@ def fit_scipy(name, data):
         params = {"mu": mu, "scale": scale}
         k = 2
 
+    elif name == "LogLogistic":
+        # Go-Fitter: exakte MLE als Logistic-MLE auf ln(x); scale = exp(mu), shape = 1/s.
+        # fisk.fit wäre nur numerisch approximiert und würde vom Go-Ergebnis abweichen.
+        if np.any(data <= 0):
+            raise ValueError("LogLogistic benötigt positive Daten")
+        mu, s = logistic.fit(np.log(data))
+        scale, shape = np.exp(mu), 1.0 / s
+        loglik = np.sum(fisk.logpdf(data, shape, loc=0, scale=scale))
+        cdf = lambda x: fisk.cdf(x, shape, loc=0, scale=scale)
+        params = {"scale": scale, "shape": shape}
+        k = 2
+
     elif name == "Cauchy":
         # Go-Fitter: MLE über die Fixpunkt-Score-Gleichungen; SciPy-Referenz über cauchy.fit.
         mu, scale = cauchy.fit(data)
@@ -374,7 +387,7 @@ def main():
     for name in [
         "Gumbel", "Beta", "LogNormal", "Gamma",
         "Normal", "Weibull", "Exponential",
-        "Laplace", "Logistic", "Rayleigh", "Pareto", "ChiSquare", "Cauchy", "StudentT",
+        "Laplace", "Logistic", "LogLogistic", "Rayleigh", "Pareto", "ChiSquare", "Cauchy", "StudentT",
     ]:
         try:
             scipy_results[name] = fit_scipy(name, data)

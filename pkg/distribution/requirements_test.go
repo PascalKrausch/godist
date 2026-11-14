@@ -114,6 +114,19 @@ func sampleLogistic(rng *rand.Rand, mu, s float64, n int) []float64 {
 	return out
 }
 
+// LogLogistic per Inversionsmethode: α·(U / (1 − U))^(1/β); U = 0 wird verworfen.
+func sampleLogLogistic(rng *rand.Rand, alpha, beta float64, n int) []float64 {
+	out := make([]float64, n)
+	for i := range out {
+		u := rng.Float64()
+		for u == 0 {
+			u = rng.Float64()
+		}
+		out[i] = alpha * math.Pow(u/(1-u), 1/beta)
+	}
+	return out
+}
+
 func sampleBeta(rng *rand.Rand, alpha, betaParam float64, n int) []float64 {
 	out := make([]float64, n)
 
@@ -256,6 +269,17 @@ func TestFittersRecoverKnownParameters(t *testing.T) {
 		l := dist.(Logistic)
 		assertRelative(t, "Mu", l.Mu, 3, tol)
 		assertRelative(t, "Scale", l.Scale, 2, tol)
+	})
+
+	t.Run("LogLogistic", func(t *testing.T) {
+		data := sampleLogLogistic(rng, 2, 3, sampleSize)
+		dist, err := LogLogisticFitter{}.Fit(data)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ll := dist.(LogLogistic)
+		assertRelative(t, "Scale", ll.Scale, 2, tol)
+		assertRelative(t, "Shape", ll.Shape, 3, tol)
 	})
 
 	t.Run("Rayleigh", func(t *testing.T) {
@@ -403,6 +427,7 @@ func TestPDFIntegratesToCDFDifference(t *testing.T) {
 		{"Gamma", Gamma{Alpha: 2.5, Beta: 1.5}, 0.1, 9},
 		{"Weibull", Weibull{Shape: 1.8, Scale: 2}, 0.05, 5},
 		{"Gumbel", Gumbel{Mu: 1, Beta: 2}, -4, 8},
+		{"LogLogistic", LogLogistic{Scale: 2, Shape: 3}, 0.1, 8},
 	}
 
 	const steps = 20000
@@ -444,6 +469,7 @@ func TestLogPDFMatchesLogOfPDF(t *testing.T) {
 		Gamma{Alpha: 3, Beta: 2},
 		Weibull{Shape: 2, Scale: 4},
 		Gumbel{Mu: 0, Beta: 1.5},
+		LogLogistic{Scale: 2, Shape: 3},
 	}
 	points := []float64{0.1, 0.5, 1, 2, 3.5, 7}
 

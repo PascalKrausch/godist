@@ -95,6 +95,14 @@ func Catalog() []Spec {
 			Fitter:      LogisticFitter{},
 		},
 		{
+			Name:           "LogLogistic",
+			Description:    "Log-logistische Verteilung für positive Daten mit schwerem rechten Tail",
+			Params:         []string{"scale", "shape"},
+			Support:        "(0, ∞)",
+			ZeroInflatable: true,
+			Fitter:         LogLogisticFitter{},
+		},
+		{
 			Name:           "Pareto",
 			Description:    "Pareto-Verteilung mit schwerem rechten Tail",
 			Params:         []string{"shape", "scale"},

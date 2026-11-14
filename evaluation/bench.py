@@ -28,6 +28,7 @@ import scipy
 from scipy.stats import (
     beta as beta_dist,
     expon,
+    fisk,
     gamma,
     gumbel_r,
     laplace,
@@ -51,7 +52,7 @@ SEED = 42
 GOLDEN_GAMMA = 0x9E3779B97F4A7C15
 NAMES = [
     "Beta", "Exponential", "Normal", "Gumbel", "Gamma",
-    "LogNormal", "Weibull", "Laplace", "Logistic", "Rayleigh", "Pareto", "ChiSquare", "Cauchy", "StudentT",
+    "LogNormal", "LogLogistic", "Weibull", "Laplace", "Logistic", "Rayleigh", "Pareto", "ChiSquare", "Cauchy", "StudentT",
 ]
 
 
@@ -89,6 +90,7 @@ FIT_CALLS = {
     "Weibull": lambda d: weibull_min.fit(d, floc=0),
     "Laplace": lambda d: laplace.fit(d),
     "Logistic": lambda d: logistic.fit(d),
+    "LogLogistic": lambda d: logistic.fit(np.log(d)),
     "Rayleigh": lambda d: rayleigh.fit(d, floc=0),
     "Pareto": lambda d: pareto.fit(d, floc=0),
     "ChiSquare": lambda d: chi2.fit(d, floc=0, fscale=1),

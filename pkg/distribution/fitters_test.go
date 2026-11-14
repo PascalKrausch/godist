@@ -28,6 +28,7 @@ func TestFittersFitValidData(t *testing.T) {
 		{"Weibull", WeibullFitter{}, 2, true},
 		{"Laplace", LaplaceFitter{}, 2, false},
 		{"Logistic", LogisticFitter{}, 2, false},
+		{"LogLogistic", LogLogisticFitter{}, 2, true},
 		{"Rayleigh", RayleighFitter{}, 1, true},
 		{"Pareto", ParetoFitter{}, 2, true},
 		{"ChiSquare", ChiSquareFitter{}, 1, true},
@@ -95,6 +96,8 @@ func TestFittersRejectInsufficientOrInvalidData(t *testing.T) {
 		{"Laplace needs a positive scale", LaplaceFitter{}, []float64{2, 2, 2}},
 		{"Logistic needs at least two observations", LogisticFitter{}, []float64{1}},
 		{"Logistic needs varying observations", LogisticFitter{}, []float64{2, 2, 2}},
+		{"LogLogistic needs at least two observations", LogLogisticFitter{}, []float64{1}},
+		{"LogLogistic needs varying observations", LogLogisticFitter{}, []float64{2, 2, 2}},
 		{"Rayleigh needs positive observations", RayleighFitter{}, []float64{0, 0}},
 		{"Pareto needs positive observations", ParetoFitter{}, []float64{0, 1, 2}},
 		{"Pareto needs varying observations", ParetoFitter{}, []float64{2, 2, 2}},
@@ -383,7 +386,7 @@ func TestStudentTFitterSatisfiesScoreEquations(t *testing.T) {
 
 func TestPositiveSupportFittersRejectZeros(t *testing.T) {
 	withZero := []float64{0, 0.5, 1.2, 2.3, 3.1, 4.8, 0.9, 1.7}
-	fitters := []Fitter{WeibullFitter{}, GammaFitter{}, RayleighFitter{}, LogNormalFitter{}, ParetoFitter{}, ChiSquareFitter{}}
+	fitters := []Fitter{WeibullFitter{}, GammaFitter{}, RayleighFitter{}, LogNormalFitter{}, LogLogisticFitter{}, ParetoFitter{}, ChiSquareFitter{}}
 	for _, f := range fitters {
 		if _, err := f.Fit(withZero); err == nil {
 			t.Errorf("%s.Fit() accepted data containing 0, want failure", f.Name())

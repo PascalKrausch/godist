@@ -9,7 +9,7 @@ import (
 // benchSizes sind die Stichprobengrößen für alle Benchmarks; evaluation/bench.py nutzt dieselben.
 var benchSizes = []int{100, 10_000, 1_000_000}
 
-// benchFitters enthält dieselben Verteilungen wie evaluation/compare.py.
+// benchFitters enthält dieselben Verteilungen wie evaluation/compare.py, zusätzlich LogLogistic.
 var benchFitters = []Fitter{
 	BetaFitter{},
 	ExponentialFitter{},
@@ -17,6 +17,7 @@ var benchFitters = []Fitter{
 	GumbelFitter{},
 	GammaFitter{},
 	LogNormalFitter{},
+	LogLogisticFitter{},
 	WeibullFitter{},
 	LaplaceFitter{},
 	LogisticFitter{},
@@ -93,7 +94,7 @@ func BenchmarkSelectAllModels(b *testing.B) {
 // selectAllModelsSequential ist die sequenzielle Referenzimplementierung für den Crossover-Benchmark.
 func selectAllModelsSequential(data []float64) ([]FitResult, []FitFailure, error) {
 	fitters := []Fitter{
-		WeibullFitter{}, LogNormalFitter{}, GammaFitter{}, NormalFitter{}, BetaFitter{},
+		WeibullFitter{}, LogNormalFitter{}, LogLogisticFitter{}, GammaFitter{}, NormalFitter{}, BetaFitter{},
 		ExponentialFitter{}, GumbelFitter{}, RayleighFitter{}, LaplaceFitter{}, LogisticFitter{},
 		ParetoFitter{}, ChiSquareFitter{}, CauchyFitter{}, StudentTFitter{},
 	}

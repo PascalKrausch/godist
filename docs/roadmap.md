@@ -54,7 +54,7 @@ Mögliche Erweiterungen:
 
 | Priorität | Verteilungen | Hinweise |
 |---|---|---|
-| Erledigt | Logistic, Pareto, Chi-Quadrat | Unter den 14 implementierten Verteilungen. |
+| Erledigt | Logistic, LogLogistic, Pareto, Chi-Quadrat | Unter den 15 implementierten Verteilungen. |
 | Erledigt | Student-t | Symmetrisch mit einstellbarer Tail-Schwere; ν per Profil-Likelihood auf [0.1, 10⁹] begrenzt. |
 | Offen | Log-logistisch | Nützlich für positive Daten und schwere rechte Tails. |
 | Später | Generalized Extreme Value (GEV) | Wertvoll für Extremwertanalysen, aber mit parameterabhängigem Support und anspruchsvoller numerischer Optimierung. |

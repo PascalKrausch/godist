@@ -33,6 +33,11 @@ func TestNumericalStabilityVerySmallValues(t *testing.T) {
 			fitter: WeibullFitter{},
 			data:   []float64{1e-10, 2e-10, 3e-10, 4e-10, 5e-10, 1e-9, 2e-9, 5e-9},
 		},
+		{
+			name:   "LogLogistic with very small values",
+			fitter: LogLogisticFitter{},
+			data:   []float64{1e-8, 2e-8, 3e-8, 4e-8, 5e-8, 1e-7, 2e-7, 5e-7},
+		},
 	}
 
 	for _, tt := range tests {
@@ -107,6 +112,11 @@ func TestNumericalStabilityVeryLargeValues(t *testing.T) {
 			data:   []float64{1e8, 2e8, 3e8, 4e8, 5e8, 1e9, 2e9, 5e9},
 		},
 		{
+			name:   "LogLogistic with very large values",
+			fitter: LogLogisticFitter{},
+			data:   []float64{1e8, 2e8, 3e8, 4e8, 5e8, 1e9, 2e9, 5e9},
+		},
+		{
 			name:   "Normal with very large values",
 			fitter: NormalFitter{},
 			data:   []float64{1e8, 2e8, 3e8, 4e8, 5e8, 1e9, 2e9, 5e9},
@@ -173,6 +183,7 @@ func TestNumericalStabilityWideRangeValues(t *testing.T) {
 		fitter Fitter
 	}{
 		{"LogNormal", LogNormalFitter{}},
+		{"LogLogistic", LogLogisticFitter{}},
 		{"Gamma", GammaFitter{}},
 		{"Weibull", WeibullFitter{}},
 	}
@@ -259,6 +270,10 @@ func TestNumericalStabilityParametersNearBoundaries(t *testing.T) {
 			name: "LogNormal with very large sigma",
 			dist: LogNormal{Mu: 0, Sigma: 1e10},
 		},
+		{
+			name: "LogLogistic with very large shape",
+			dist: LogLogistic{Scale: 1, Shape: 1e6},
+		},
 	}
 
 	for _, tt := range tests {
@@ -320,6 +335,11 @@ func TestNumericalStabilityOverflowUnderflow(t *testing.T) {
 			dist: LogNormal{Mu: 0, Sigma: 1},
 			x:    1e10,
 		},
+		{
+			name: "LogLogistic PDF with large x",
+			dist: LogLogistic{Scale: 1, Shape: 2},
+			x:    1e10,
+		},
 	}
 
 	for _, tt := range tests {
@@ -356,6 +376,7 @@ func TestNumericalStabilityZeroValues(t *testing.T) {
 		{"Exponential", ExponentialFitter{}},
 		{"Gamma", GammaFitter{}},
 		{"LogNormal", LogNormalFitter{}},
+		{"LogLogistic", LogLogisticFitter{}},
 		{"Weibull", WeibullFitter{}},
 	}
 
@@ -400,6 +421,7 @@ func TestNumericalStabilityNearZeroParameters(t *testing.T) {
 		{"Exponential", ExponentialFitter{}},
 		{"Gamma", GammaFitter{}},
 		{"LogNormal", LogNormalFitter{}},
+		{"LogLogistic", LogLogisticFitter{}},
 		{"Weibull", WeibullFitter{}},
 	}
 

@@ -18,6 +18,7 @@ import numpy as np
 from scipy.stats import (
     beta as beta_dist,
     expon,
+    fisk,
     gamma,
     gumbel_r,
     laplace,
@@ -56,6 +57,8 @@ def frozen_from_params(name, params):
         return laplace(loc=p["mu"], scale=p["scale"])
     if name == "Logistic":
         return logistic(loc=p["mu"], scale=p["scale"])
+    if name == "LogLogistic":
+        return fisk(p["shape"], loc=0, scale=p["scale"])
     if name == "Rayleigh":
         return rayleigh(loc=0, scale=p["scale"])
     if name == "Pareto":

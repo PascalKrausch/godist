@@ -100,6 +100,18 @@ func TestRegressionFixedDatasets(t *testing.T) {
 			metricsTol: 0.1,
 		},
 		{
+			name:       "LogLogistic simple dataset",
+			data:       []float64{1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0},
+			fitter:     LogLogisticFitter{},
+			wantParams: []float64{4.920051, 2.528201}, // Logistic-MLE auf ln(x), α = exp(μ), β = 1/s
+			wantMetrics: FitMetrics{
+				SampleSize: 10,
+				Discarded:  0,
+			},
+			paramTol:   0.01,
+			metricsTol: 0.1,
+		},
+		{
 			name:       "Pareto simple dataset",
 			data:       []float64{1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0},
 			fitter:     ParetoFitter{},

@@ -342,6 +342,8 @@ func getDistributionName(dist distribution.ContinuousDistribution) string {
 		return "Laplace"
 	case distribution.Logistic:
 		return "Logistic"
+	case distribution.LogLogistic:
+		return "LogLogistic"
 	case distribution.Rayleigh:
 		return "Rayleigh"
 	case distribution.Pareto:
