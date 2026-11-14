@@ -103,6 +103,15 @@ func Catalog() []Spec {
 			Fitter:         LogLogisticFitter{},
 		},
 		{
+			Name:           "BurrXII",
+			Description:    "Burr-Typ-XII-Verteilung mit zwei Formparametern, verallgemeinert die Log-Logistic",
+			Params:         []string{"scale", "shape_c", "shape_k"},
+			Support:        "(0, ∞)",
+			FitNotes:       "scheitert bei Nullwerten (ln(0) undefiniert); Startwerte aus der Log-Logistic-MLE; Fits mit c oder k über 1e6 (Grenzfall, z. B. exponentialähnliche Daten) werden abgelehnt",
+			ZeroInflatable: true,
+			Fitter:         BurrXIIFitter{},
+		},
+		{
 			Name:           "Pareto",
 			Description:    "Pareto-Verteilung mit schwerem rechten Tail",
 			Params:         []string{"shape", "scale"},

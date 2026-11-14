@@ -55,7 +55,7 @@ Im Hilfetext (`distfit -h`) stehen dieselben Flags mit Kurzbeschreibung.
 
 ## Verteilungen
 
-`distfit list distributions` zeigt alle 15 Kandidaten mit Parametern, Träger und Hinweisen:
+`distfit list distributions` zeigt alle 16 Kandidaten mit Parametern, Träger und Hinweisen:
 
 ```text
 $ distfit list distributions
@@ -72,7 +72,7 @@ Gumbel       mu, beta               ℝ                           Gumbel-Verteil
 ```
 
 Die vollständige Liste der Namen (Standardreihenfolge):
-`Weibull`, `LogNormal`, `Gamma`, `Normal`, `Beta`, `Exponential`, `Gumbel`, `Rayleigh`, `Laplace`, `Logistic`, `LogLogistic`, `Pareto`, `ChiSquare`, `Cauchy`, `StudentT`.
+`Weibull`, `LogNormal`, `Gamma`, `Normal`, `Beta`, `Exponential`, `Gumbel`, `Rayleigh`, `Laplace`, `Logistic`, `LogLogistic`, `BurrXII`, `Pareto`, `ChiSquare`, `Cauchy`, `StudentT`.
 
 Mit `-format=json` liefert der Befehl ein Array; die Felder sind `name`, `description`, `params`, `support`, `fit_notes` und `zero_inflatable`:
 
@@ -98,7 +98,7 @@ Die Namen sind in allen Flags case-insensitive: `weibull`, `Weibull` und `WEIBUL
 
 ## Modellauswahl
 
-Ohne Auswahlflag werden alle 15 Kandidaten verwendet. Mit den folgenden Flags lässt sich die Menge einschränken:
+Ohne Auswahlflag werden alle 16 Kandidaten verwendet. Mit den folgenden Flags lässt sich die Menge einschränken:
 
 | Kombination | Verhalten |
 |-------------|-----------|
@@ -114,7 +114,7 @@ Ohne Auswahlflag werden alle 15 Kandidaten verwendet. Mit den folgenden Flags l�
 
 `-zero-inflated` modelliert Nullwerte als Punktmasse bei 0 plus eine kontinuierliche Verteilung für die positiven Werte. Verglichen werden dann nur die ZI-fähigen Verteilungen, angezeigt als `ZI-<Name>`:
 
-- ZI-fähig: Weibull, LogNormal, LogLogistic, Gamma, Exponential, Rayleigh, Pareto, ChiSquare
+- ZI-fähig: Weibull, LogNormal, LogLogistic, BurrXII, Gamma, Exponential, Rayleigh, Pareto, ChiSquare
 - Ohne Flag scheitern Kandidaten mit Träger (0, ∞) bei Nullwerten (Fast-Fail-Policy).
 - Mit `-zero-inflated` und einer nicht ZI-fähigen Verteilung (`-distribution=normal`, `-include=weibull,normal`) gilt Exit `2`: `Normal unterstützt keine Zero-Inflation`.
 

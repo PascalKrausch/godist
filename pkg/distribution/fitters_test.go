@@ -98,6 +98,8 @@ func TestFittersRejectInsufficientOrInvalidData(t *testing.T) {
 		{"Logistic needs varying observations", LogisticFitter{}, []float64{2, 2, 2}},
 		{"LogLogistic needs at least two observations", LogLogisticFitter{}, []float64{1}},
 		{"LogLogistic needs varying observations", LogLogisticFitter{}, []float64{2, 2, 2}},
+		{"BurrXII needs at least three observations", BurrXIIFitter{}, []float64{1, 2}},
+		{"BurrXII needs varying observations", BurrXIIFitter{}, []float64{2, 2, 2}},
 		{"Rayleigh needs positive observations", RayleighFitter{}, []float64{0, 0}},
 		{"Pareto needs positive observations", ParetoFitter{}, []float64{0, 1, 2}},
 		{"Pareto needs varying observations", ParetoFitter{}, []float64{2, 2, 2}},

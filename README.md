@@ -5,7 +5,7 @@
 > **Projektstatus: noch nicht produktiv verwenden.**
 > Vor einem produktiven Einsatz müssen insbesondere Parameterschätzung, numerische Stabilität, Gütemaße, Eingabevalidierung und Testabdeckung systematisch überprüft werden.
 >
-> **Aktueller Stand:** 15 Verteilungen sind implementiert. Die Tests in `pkg/distribution`, `internal/cli` und `cmd/distfit` laufen grün (`go test ./...`). Der CLI-Prototyp verarbeitet reale Datensätze (z. B. `winequality-red.csv`). Nullwerte werden strikt behandelt (siehe [Methodik])
+> **Aktueller Stand:** 16 Verteilungen sind implementiert. Die Tests in `pkg/distribution`, `internal/cli` und `cmd/distfit` laufen grün (`go test ./...`). Der CLI-Prototyp verarbeitet reale Datensätze (z. B. `winequality-red.csv`). Nullwerte werden strikt behandelt (siehe [Methodik])
 
 ## Ziele
 
@@ -31,6 +31,7 @@
 | Laplace | `mu`, `scale` | ℝ |
 | Logistic | `mu`, `scale` | ℝ |
 | LogLogistic | `scale`, `shape` | (0, ∞) |
+| BurrXII | `scale`, `shape_c`, `shape_k` | (0, ∞) |
 | Rayleigh | `scale` | [0, ∞) |
 | Pareto | `shape`, `scale` | [scale, ∞) |
 | ChiSquare | `df` | [0, ∞) |
@@ -48,6 +49,7 @@ Die Verteilungen mit positivem Träger behandeln Nullwerte derzeit **streng**: E
 
 - **LogNormal:** scheitert bei jedem Nullwert, da `log(0)` nicht definiert ist.
 - **LogLogistic:** scheitert bei jedem Nullwert, da `log(0)` nicht definiert ist (wie LogNormal).
+- **BurrXII:** scheitert bei jedem Nullwert, da `log(0)` nicht definiert ist. Fits, bei denen c oder k über 10⁶ laufen (Grenzfall, z. B. exponentialähnliche Daten), werden ebenfalls abgelehnt, da dann kein inneres Maximum der Likelihood existiert.
 - **Gamma und Weibull:** scheitern bei jedem Nullwert. Die Dichte an der Stelle 0 ist für Formparameter ungleich 1 entweder 0 oder unendlich. Für Formparameter genau 1 entspricht die Verteilung der Exponentialverteilung, die Nullwerte behält.
 - **Rayleigh:** Nullen werden bei der Schätzung ignoriert, die Dichte an der Stelle 0 ist aber 0. Der Kandidat scheitert daher bei jedem Nullwert.
 - **ChiSquare:** Der Träger ist [0, ∞). Nullwerte liegen für k > 0 am Rand des Trägers und werden wie bei Gamma abgelehnt (Fast-Fail).
@@ -55,7 +57,7 @@ Die Verteilungen mit positivem Träger behandeln Nullwerte derzeit **streng**: E
 - **Normal, Gumbel, Laplace, Logistic:** behalten Nullwerte (`CleanDataWithZero`) und sind von dieser Regel nicht betroffen.
 - **Beta:** Der Träger wird aus den Daten abgeleitet ( Ob Nullwerte scheitern, entscheidet die Dichteprüfung.
 
-**Negative Werte** werden ebenfalls über die Trägerprüfung behandelt: Exponential, Gamma, Weibull, LogNormal, LogLogistic, Rayleigh, Pareto und ChiSquare lehnen jeden negativen Wert mit `ErrNegativeValues` ab. Normal, Gumbel, Laplace, Cauchy und StudentT sowie Beta (Träger aus den Daten) verarbeiten negative Werte. Alle Kandidaten werten so dieselbe Stichprobe aus.
+**Negative Werte** werden ebenfalls über die Trägerprüfung behandelt: Exponential, Gamma, Weibull, LogNormal, LogLogistic, BurrXII, Rayleigh, Pareto und ChiSquare lehnen jeden negativen Wert mit `ErrNegativeValues` ab. Normal, Gumbel, Laplace, Cauchy und StudentT sowie Beta (Träger aus den Daten) verarbeiten negative Werte. Alle Kandidaten werten so dieselbe Stichprobe aus.
 
 Ein fehlgeschlagener Kandidat wird nicht gerankt. Die Nullzahl ist damit ein bewusst sichtbarer Befund und kein stiller Datenverlust.
 
