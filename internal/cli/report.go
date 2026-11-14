@@ -356,6 +356,8 @@ func getDistributionName(dist distribution.ContinuousDistribution) string {
 		return "Cauchy"
 	case distribution.StudentT:
 		return "StudentT"
+	case distribution.InverseGaussian:
+		return "InverseGaussian"
 	default:
 		return "Unknown"
 	}

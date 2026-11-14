@@ -27,10 +27,12 @@ import pandas as pd
 import scipy
 from scipy.stats import (
     beta as beta_dist,
+    burr,
     expon,
     fisk,
     gamma,
     gumbel_r,
+    invgauss,
     laplace,
     logistic,
     lognorm,
@@ -53,6 +55,7 @@ GOLDEN_GAMMA = 0x9E3779B97F4A7C15
 NAMES = [
     "Beta", "Exponential", "Normal", "Gumbel", "Gamma",
     "LogNormal", "LogLogistic", "Weibull", "Laplace", "Logistic", "Rayleigh", "Pareto", "ChiSquare", "Cauchy", "StudentT",
+    "BurrXII", "InverseGaussian",
 ]
 
 
@@ -96,6 +99,8 @@ FIT_CALLS = {
     "ChiSquare": lambda d: chi2.fit(d, floc=0, fscale=1),
     "Cauchy": lambda d: cauchy.fit(d),
     "StudentT": lambda d: student_t.fit(d),
+    "BurrXII": lambda d: burr.fit(d, floc=0),
+    "InverseGaussian": lambda d: invgauss.fit(d, floc=0),
 }
 
 

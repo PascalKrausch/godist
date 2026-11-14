@@ -26,6 +26,8 @@ var benchFitters = []Fitter{
 	ChiSquareFitter{},
 	CauchyFitter{},
 	StudentTFitter{},
+	BurrXIIFitter{},
+	InverseGaussianFitter{},
 }
 
 // benchData erzeugt exponentialverteilte Daten aus SplitMix64 (Seed 42) per Inversionsmethode.
@@ -65,6 +67,12 @@ func BenchmarkFit(b *testing.B) {
 		data := benchData(n)
 		for _, f := range benchFitters {
 			b.Run(fmt.Sprintf("%s/n=%d", f.Name(), n), func(b *testing.B) {
+				// Einzelne Fitter dürfen auf degenerierten Datensätzen scheitern
+				// (z. B. BurrXII läuft bei exponentiellen Daten an die Formgrenze);
+				// der Benchmark wird dann übersprungen statt abgebrochen.
+				if _, err := f.Fit(data); err != nil {
+					b.Skipf("%s fit failed: %v", f.Name(), err)
+				}
 				b.ReportAllocs()
 				for i := 0; i < b.N; i++ {
 					if _, err := f.Fit(data); err != nil {
@@ -96,7 +104,7 @@ func selectAllModelsSequential(data []float64) ([]FitResult, []FitFailure, error
 	fitters := []Fitter{
 		WeibullFitter{}, LogNormalFitter{}, LogLogisticFitter{}, GammaFitter{}, NormalFitter{}, BetaFitter{},
 		ExponentialFitter{}, GumbelFitter{}, RayleighFitter{}, LaplaceFitter{}, LogisticFitter{},
-		ParetoFitter{}, ChiSquareFitter{}, CauchyFitter{}, StudentTFitter{},
+		BurrXIIFitter{}, ParetoFitter{}, ChiSquareFitter{}, CauchyFitter{}, StudentTFitter{}, InverseGaussianFitter{},
 	}
 	var results []FitResult
 	var failures []FitFailure

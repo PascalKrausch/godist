@@ -38,6 +38,11 @@ func TestNumericalStabilityVerySmallValues(t *testing.T) {
 			fitter: LogLogisticFitter{},
 			data:   []float64{1e-8, 2e-8, 3e-8, 4e-8, 5e-8, 1e-7, 2e-7, 5e-7},
 		},
+		{
+			name:   "InverseGaussian with very small values",
+			fitter: InverseGaussianFitter{},
+			data:   []float64{1e-10, 2e-10, 3e-10, 4e-10, 5e-10, 1e-9, 2e-9, 5e-9},
+		},
 	}
 
 	for _, tt := range tests {
@@ -134,6 +139,11 @@ func TestNumericalStabilityVeryLargeValues(t *testing.T) {
 		{
 			name:   "Pareto with very large values",
 			fitter: ParetoFitter{},
+			data:   []float64{1e8, 2e8, 3e8, 4e8, 5e8, 1e9, 2e9, 5e9},
+		},
+		{
+			name:   "InverseGaussian with very large values",
+			fitter: InverseGaussianFitter{},
 			data:   []float64{1e8, 2e8, 3e8, 4e8, 5e8, 1e9, 2e9, 5e9},
 		},
 	}
@@ -273,6 +283,14 @@ func TestNumericalStabilityParametersNearBoundaries(t *testing.T) {
 		{
 			name: "LogLogistic with very large shape",
 			dist: LogLogistic{Scale: 1, Shape: 1e6},
+		},
+		{
+			name: "InverseGaussian with very small lambda",
+			dist: InverseGaussian{Mu: 1, Lambda: 1e-10},
+		},
+		{
+			name: "InverseGaussian with very large lambda",
+			dist: InverseGaussian{Mu: 1, Lambda: 1e10},
 		},
 	}
 

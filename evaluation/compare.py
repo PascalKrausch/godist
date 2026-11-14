@@ -10,10 +10,12 @@ import numpy as np
 import pandas as pd
 from scipy.stats import (
     beta as beta_dist,
+    burr,
     expon,
     fisk,
     gamma,
     gumbel_r,
+    invgauss,
     kurtosis,
     laplace,
     logistic,
@@ -317,6 +319,28 @@ def fit_scipy(name, data):
         }
         k = 2
 
+    elif name == "BurrXII":
+        # Go-Fitter: eigene profilierte MLE; SciPy-Referenz über burr.fit.
+        # burr(c, d, scale) entspricht Go BurrXII{ShapeC: c, ShapeK: d, Scale: scale}.
+        if np.any(data <= 0):
+            raise ValueError("BurrXII benötigt positive Daten")
+        c, d, _, scale = burr.fit(data, floc=0)
+        loglik = np.sum(burr.logpdf(data, c, d, loc=0, scale=scale))
+        cdf = lambda x: burr.cdf(x, c, d, loc=0, scale=scale)
+        params = {"scale": scale, "shape_c": c, "shape_k": d}
+        k = 3
+
+    elif name == "InverseGaussian":
+        # Go-Fitter: geschlossene MLE (mu = mean, lambda = 1/(mean(1/x) − 1/mean(x))).
+        # invgauss(mu_s, scale=s) entspricht Go InverseGaussian{Mu: s·mu_s, Lambda: s}.
+        if np.any(data <= 0):
+            raise ValueError("InverseGaussian benötigt positive Daten")
+        mu_s, _, scale = invgauss.fit(data, floc=0)
+        loglik = np.sum(invgauss.logpdf(data, mu_s, loc=0, scale=scale))
+        cdf = lambda x: invgauss.cdf(x, mu_s, loc=0, scale=scale)
+        params = {"mu": scale * mu_s, "lambda": scale}
+        k = 2
+
     else:
         raise ValueError(f"Unbekannte Verteilung: {name}")
 
@@ -388,6 +412,7 @@ def main():
         "Gumbel", "Beta", "LogNormal", "Gamma",
         "Normal", "Weibull", "Exponential",
         "Laplace", "Logistic", "LogLogistic", "Rayleigh", "Pareto", "ChiSquare", "Cauchy", "StudentT",
+        "BurrXII", "InverseGaussian",
     ]:
         try:
             scipy_results[name] = fit_scipy(name, data)

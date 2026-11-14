@@ -125,6 +125,13 @@ func TestDistributionFunctions(t *testing.T) {
 			pdf:  2 / (3 * math.E),
 			cdf:  1 - 1/math.E,
 		},
+		{
+			name: "InverseGaussian",
+			dist: InverseGaussian{Mu: 1, Lambda: 1},
+			x:    1,
+			pdf:  1 / math.Sqrt(2*math.Pi),
+			cdf:  0.5 + math.Exp(2)*0.5*math.Erfc(math.Sqrt2),
+		},
 	}
 
 	for _, tt := range tests {
@@ -163,6 +170,7 @@ func TestDistributionQuantileBoundaries(t *testing.T) {
 		{"Gamma", Gamma{Alpha: 2, Beta: 3}, 0, math.Inf(1)},
 		{"LogNormal", LogNormal{Mu: 0, Sigma: 1}, 0, math.Inf(1)},
 		{"Weibull", Weibull{Shape: 2, Scale: 3}, 0, math.Inf(1)},
+		{"InverseGaussian", InverseGaussian{Mu: 2, Lambda: 3}, 0, math.Inf(1)},
 	}
 
 	for _, tt := range tests {
@@ -203,6 +211,7 @@ func TestDistributionQuantileRoundTrip(t *testing.T) {
 		{"Gamma", Gamma{Alpha: 2.5, Beta: 3}},
 		{"LogNormal", LogNormal{Mu: 0, Sigma: 0.8}},
 		{"Weibull", Weibull{Shape: 1.7, Scale: 3}},
+		{"InverseGaussian", InverseGaussian{Mu: 1.5, Lambda: 2}},
 	}
 	probs := []float64{0.001, 0.01, 0.1, 0.25, 0.5, 0.75, 0.9, 0.99, 0.999}
 
@@ -252,6 +261,8 @@ func TestDistributionSupportBoundaries(t *testing.T) {
 		{"Gamma at zero", Gamma{Alpha: 2, Beta: 3}, 0, 0},
 		{"LogNormal at zero", LogNormal{Mu: 0, Sigma: 1}, 0, 0},
 		{"Weibull at zero", Weibull{Shape: 2, Scale: 3}, 0, 0},
+		{"InverseGaussian at zero", InverseGaussian{Mu: 1, Lambda: 2}, 0, 0},
+		{"InverseGaussian below zero", InverseGaussian{Mu: 1, Lambda: 2}, -0.5, 0},
 	}
 
 	for _, tt := range tests {
@@ -303,6 +314,7 @@ func TestDistributionCDFProperties(t *testing.T) {
 		{"Gamma", Gamma{Alpha: 2, Beta: 3}, []float64{-1, 0, 0.25, 1, 3, 10}},
 		{"LogNormal", LogNormal{Mu: 0, Sigma: 1}, []float64{-1, 0, 0.25, 1, 3, 10}},
 		{"Weibull", Weibull{Shape: 2, Scale: 3}, []float64{-1, 0, 0.25, 1, 3, 10}},
+		{"InverseGaussian", InverseGaussian{Mu: 1, Lambda: 2}, []float64{-1, 0, 0.25, 1, 3, 10}},
 	}
 
 	for _, tt := range tests {
@@ -351,6 +363,8 @@ func TestDistributionRejectsInvalidParameters(t *testing.T) {
 		{"Gamma", Gamma{Alpha: 2, Beta: 0}},
 		{"LogNormal", LogNormal{Mu: 0, Sigma: 0}},
 		{"Weibull", Weibull{Shape: 2, Scale: 0}},
+		{"InverseGaussian", InverseGaussian{Mu: 1, Lambda: 0}},
+		{"InverseGaussian mu", InverseGaussian{Mu: 0, Lambda: 1}},
 	}
 
 	for _, tt := range tests {

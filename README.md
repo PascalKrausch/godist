@@ -5,7 +5,7 @@
 > **Projektstatus: noch nicht produktiv verwenden.**
 > Vor einem produktiven Einsatz müssen insbesondere Parameterschätzung, numerische Stabilität, Gütemaße, Eingabevalidierung und Testabdeckung systematisch überprüft werden.
 >
-> **Aktueller Stand:** 16 Verteilungen sind implementiert. Die Tests in `pkg/distribution`, `internal/cli` und `cmd/distfit` laufen grün (`go test ./...`). Der CLI-Prototyp verarbeitet reale Datensätze (z. B. `winequality-red.csv`). Nullwerte werden strikt behandelt (siehe [Methodik])
+> **Aktueller Stand:** 17 Verteilungen sind implementiert. Die Tests in `pkg/distribution`, `internal/cli` und `cmd/distfit` laufen grün (`go test ./...`). Der CLI-Prototyp verarbeitet reale Datensätze (z. B. `winequality-red.csv`). Nullwerte werden strikt behandelt (siehe [Methodik])
 
 ## Ziele
 
@@ -37,6 +37,7 @@
 | ChiSquare | `df` | [0, ∞) |
 | Cauchy | `mu`, `scale` | ℝ |
 | StudentT | `mu`, `scale`, `nu` | ℝ |
+| InverseGaussian | `mu`, `lambda` | (0, ∞) |
 
 Student-t: ν wird per Profil-Likelihood auf [0.1, 10⁹] begrenzt. Nahezu normalverteilte Daten erhalten daher sehr große ν-Werte, die an SciPy angenähert sind (White-Wine: ν ≈ 3.5·10⁷ statt 7.7·10⁸, AIC-Abweichung 0.00).
 
@@ -128,7 +129,6 @@ Geplant sind derzeit:
 
 - Generalized Extreme value (GEV)
 - SkewNormal
-- Inverse Gaussian
 - Generalized Gammas
 - Burr XII
 

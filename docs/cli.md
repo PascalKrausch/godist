@@ -55,7 +55,7 @@ Im Hilfetext (`distfit -h`) stehen dieselben Flags mit Kurzbeschreibung.
 
 ## Verteilungen
 
-`distfit list distributions` zeigt alle 16 Kandidaten mit Parametern, Träger und Hinweisen:
+`distfit list distributions` zeigt alle 17 Kandidaten mit Parametern, Träger und Hinweisen:
 
 ```text
 $ distfit list distributions
@@ -72,7 +72,7 @@ Gumbel       mu, beta               ℝ                           Gumbel-Verteil
 ```
 
 Die vollständige Liste der Namen (Standardreihenfolge):
-`Weibull`, `LogNormal`, `Gamma`, `Normal`, `Beta`, `Exponential`, `Gumbel`, `Rayleigh`, `Laplace`, `Logistic`, `LogLogistic`, `BurrXII`, `Pareto`, `ChiSquare`, `Cauchy`, `StudentT`.
+`Weibull`, `LogNormal`, `Gamma`, `Normal`, `Beta`, `Exponential`, `Gumbel`, `Rayleigh`, `Laplace`, `Logistic`, `LogLogistic`, `BurrXII`, `Pareto`, `ChiSquare`, `Cauchy`, `StudentT`, `InverseGaussian`.
 
 Mit `-format=json` liefert der Befehl ein Array; die Felder sind `name`, `description`, `params`, `support`, `fit_notes` und `zero_inflatable`:
 
@@ -98,7 +98,7 @@ Die Namen sind in allen Flags case-insensitive: `weibull`, `Weibull` und `WEIBUL
 
 ## Modellauswahl
 
-Ohne Auswahlflag werden alle 16 Kandidaten verwendet. Mit den folgenden Flags lässt sich die Menge einschränken:
+Ohne Auswahlflag werden alle 17 Kandidaten verwendet. Mit den folgenden Flags lässt sich die Menge einschränken:
 
 | Kombination | Verhalten |
 |-------------|-----------|

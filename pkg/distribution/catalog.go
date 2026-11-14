@@ -143,6 +143,15 @@ func Catalog() []Spec {
 			FitNotes:    "nu wird per Profil-Likelihood auf [0.1, 10⁴] begrenzt",
 			Fitter:      StudentTFitter{},
 		},
+		{
+			Name:           "InverseGaussian",
+			Description:    "Inverse-Gauß-Verteilung (Wald-Verteilung) für positive, rechtsschiefe Daten",
+			Params:         []string{"mu", "lambda"},
+			Support:        "(0, ∞)",
+			FitNotes:       "scheitert bei Nullwerten; geschlossene MLE: mu = Mittelwert, lambda = 1 / (mean(1/x) − 1/mean(x))",
+			ZeroInflatable: true,
+			Fitter:         InverseGaussianFitter{},
+		},
 	}
 }
 

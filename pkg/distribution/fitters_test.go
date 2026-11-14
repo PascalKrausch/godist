@@ -34,6 +34,7 @@ func TestFittersFitValidData(t *testing.T) {
 		{"ChiSquare", ChiSquareFitter{}, 1, true},
 		{"Cauchy", CauchyFitter{}, 2, false},
 		{"StudentT", StudentTFitter{}, 3, false},
+		{"InverseGaussian", InverseGaussianFitter{}, 2, true},
 	}
 
 	for _, tt := range tests {
@@ -107,6 +108,8 @@ func TestFittersRejectInsufficientOrInvalidData(t *testing.T) {
 		{"Cauchy needs varying observations", CauchyFitter{}, []float64{2, 2, 2}},
 		{"StudentT needs at least three observations", StudentTFitter{}, []float64{1, 2}},
 		{"StudentT needs varying observations", StudentTFitter{}, []float64{2, 2, 2}},
+		{"InverseGaussian needs varying observations", InverseGaussianFitter{}, []float64{2, 2, 2}},
+		{"InverseGaussian needs positive observations", InverseGaussianFitter{}, []float64{0, 1, 2}},
 		{"Beta rejects values on specified boundaries", BetaFitter{Min: 0, Max: 1}, []float64{0, 0.3, 0.8}},
 	}
 
@@ -388,7 +391,7 @@ func TestStudentTFitterSatisfiesScoreEquations(t *testing.T) {
 
 func TestPositiveSupportFittersRejectZeros(t *testing.T) {
 	withZero := []float64{0, 0.5, 1.2, 2.3, 3.1, 4.8, 0.9, 1.7}
-	fitters := []Fitter{WeibullFitter{}, GammaFitter{}, RayleighFitter{}, LogNormalFitter{}, LogLogisticFitter{}, ParetoFitter{}, ChiSquareFitter{}}
+	fitters := []Fitter{WeibullFitter{}, GammaFitter{}, RayleighFitter{}, LogNormalFitter{}, LogLogisticFitter{}, ParetoFitter{}, ChiSquareFitter{}, InverseGaussianFitter{}}
 	for _, f := range fitters {
 		if _, err := f.Fit(withZero); err == nil {
 			t.Errorf("%s.Fit() accepted data containing 0, want failure", f.Name())

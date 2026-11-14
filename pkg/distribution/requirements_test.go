@@ -70,6 +70,22 @@ func sampleGumbel(rng *rand.Rand, mu, beta float64, n int) []float64 {
 	return out
 }
 
+// sampleInverseGaussian zieht IG(μ, λ)-Daten nach Michael, Schucany und Haas
+// (erster Durchgang einer Brownschen Bewegung mit Drift).
+func sampleInverseGaussian(rng *rand.Rand, mu, lambda float64, n int) []float64 {
+	out := make([]float64, n)
+	for i := range out {
+		nu := rng.NormFloat64()
+		y := nu * nu
+		x := mu + mu*mu*y/(2*lambda) - (mu/(2*lambda))*math.Sqrt(4*mu*lambda*y+mu*mu*y*y)
+		if rng.Float64() > mu/(mu+x) {
+			x = mu * mu / x
+		}
+		out[i] = x
+	}
+	return out
+}
+
 // Laplace: mu ± b·Exp(1) mit zufälligem Vorzeichen.
 func sampleLaplace(rng *rand.Rand, mu, b float64, n int) []float64 {
 	out := make([]float64, n)
@@ -353,6 +369,17 @@ func TestFittersRecoverKnownParameters(t *testing.T) {
 		assertRelative(t, "Scale", st.Scale, 2, 0.05)
 		assertRelative(t, "Nu", st.Nu, nu, 0.25)
 	})
+
+	t.Run("InverseGaussian", func(t *testing.T) {
+		data := sampleInverseGaussian(rng, 3, 1.5, sampleSize)
+		dist, err := InverseGaussianFitter{}.Fit(data)
+		if err != nil {
+			t.Fatal(err)
+		}
+		g := dist.(InverseGaussian)
+		assertRelative(t, "Mu", g.Mu, 3, tol)
+		assertRelative(t, "Lambda", g.Lambda, 1.5, 0.1)
+	})
 }
 
 // Anforderung: AIC = 2k − 2·LL und BIC = k·ln(n) − 2·LL mit k = Anzahl der
@@ -428,6 +455,7 @@ func TestPDFIntegratesToCDFDifference(t *testing.T) {
 		{"Weibull", Weibull{Shape: 1.8, Scale: 2}, 0.05, 5},
 		{"Gumbel", Gumbel{Mu: 1, Beta: 2}, -4, 8},
 		{"LogLogistic", LogLogistic{Scale: 2, Shape: 3}, 0.1, 8},
+		{"InverseGaussian", InverseGaussian{Mu: 1.5, Lambda: 2}, 0.1, 8},
 	}
 
 	const steps = 20000
@@ -470,6 +498,7 @@ func TestLogPDFMatchesLogOfPDF(t *testing.T) {
 		Weibull{Shape: 2, Scale: 4},
 		Gumbel{Mu: 0, Beta: 1.5},
 		LogLogistic{Scale: 2, Shape: 3},
+		InverseGaussian{Mu: 1.2, Lambda: 2},
 	}
 	points := []float64{0.1, 0.5, 1, 2, 3.5, 7}
 
