@@ -27,11 +27,12 @@ import pandas as pd
 import scipy
 from scipy.stats import (
     beta as beta_dist,
-    burr,
+    burr12,
     expon,
     fisk,
     gamma,
     gengamma,
+    genextreme,
     gumbel_r,
     invgauss,
     laplace,
@@ -55,7 +56,7 @@ SIZES = [100, 10_000, 1_000_000]
 SEED = 42
 GOLDEN_GAMMA = 0x9E3779B97F4A7C15
 NAMES = [
-    "Beta", "Exponential", "Normal", "SkewNormal", "Gumbel", "Gamma",
+    "Beta", "Exponential", "Normal", "SkewNormal", "Gumbel", "GEV", "Gamma",
     "LogNormal", "LogLogistic", "Weibull", "Laplace", "Logistic", "Rayleigh", "Pareto", "ChiSquare", "Cauchy", "StudentT",
     "BurrXII", "InverseGaussian", "GeneralizedGamma",
 ]
@@ -91,6 +92,7 @@ FIT_CALLS = {
     "Normal": lambda d: norm.fit(d),
     "SkewNormal": lambda d: skewnorm.fit(d),
     "Gumbel": lambda d: gumbel_r.fit(d),
+    "GEV": lambda d: genextreme.fit(d),
     "Gamma": lambda d: gamma.fit(d, floc=0),
     "LogNormal": lambda d: lognorm.fit(d, floc=0),
     "Weibull": lambda d: weibull_min.fit(d, floc=0),
@@ -102,7 +104,7 @@ FIT_CALLS = {
     "ChiSquare": lambda d: chi2.fit(d, floc=0, fscale=1),
     "Cauchy": lambda d: cauchy.fit(d),
     "StudentT": lambda d: student_t.fit(d),
-    "BurrXII": lambda d: burr.fit(d, floc=0),
+    "BurrXII": lambda d: burr12.fit(d, floc=0),
     "InverseGaussian": lambda d: invgauss.fit(d, floc=0),
     "GeneralizedGamma": lambda d: gengamma.fit(d, floc=0),
 }

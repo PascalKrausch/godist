@@ -162,9 +162,18 @@ func WriteTextReport(w io.Writer, report FitReport) error {
 		}
 	}
 
+	if containsModel(report.Models, "GEV") {
+		fmt.Fprintln(w)
+		fmt.Fprintln(w, extremeValueNote)
+	}
+
 	fmt.Fprintln(w)
 	return nil
 }
+
+// extremeValueNote weist darauf hin, dass ein gutes Abschneiden der GEV in der
+// Modellrangfolge nur für Extremwertdaten (z. B. Blockmaxima) fachlich plausibel ist.
+const extremeValueNote = "Hinweis: GEV ist eine Extremwertverteilung und nur für entsprechende Daten (z. B. Blockmaxima) fachlich sinnvoll; ein gutes AIC-Ranking ersetzt keine fachliche Prüfung der Datenherkunft und Modellannahmen."
 
 // WriteSummary schreibt das Ergebnis des Einzelmodells (bestes Modell) als Zusammenfassung.
 func WriteSummary(w io.Writer, dist distribution.ContinuousDistribution, metrics distribution.FitMetrics, column string, descriptive stats.Summary, discarded int) {
@@ -177,6 +186,9 @@ func WriteSummary(w io.Writer, dist distribution.ContinuousDistribution, metrics
 	fmt.Fprintf(w, "Parameter:      %s\n", formatParams(paramsToMap(dist)))
 	fmt.Fprintf(w, "AIC / BIC:      %.2f / %.2f\n", metrics.AIC, metrics.BIC)
 	fmt.Fprintf(w, "KS-Statistik:   %.4f (RMSE: %.4f)\n", metrics.KSStatistic, metrics.RMSE)
+	if getDistributionName(dist) == "GEV" {
+		fmt.Fprintln(w, extremeValueNote)
+	}
 	fmt.Fprintln(w)
 	writeDescriptive(w, descriptive)
 }
@@ -319,6 +331,16 @@ func writeTable(
 	printBorder()
 }
 
+// containsModel meldet, ob ein Modell mit dem gegebenen Namen in der Liste ist.
+func containsModel(models []FitRow, name string) bool {
+	for _, m := range models {
+		if m.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
 // getDistributionName liefert den Anzeigenamen einer Verteilung.
 func getDistributionName(dist distribution.ContinuousDistribution) string {
 	switch d := dist.(type) {
@@ -340,6 +362,8 @@ func getDistributionName(dist distribution.ContinuousDistribution) string {
 		return "Exponential"
 	case distribution.Gumbel:
 		return "Gumbel"
+	case distribution.GEV:
+		return "GEV"
 	case distribution.Laplace:
 		return "Laplace"
 	case distribution.Logistic:

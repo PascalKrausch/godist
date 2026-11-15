@@ -70,6 +70,25 @@ func sampleGumbel(rng *rand.Rand, mu, beta float64, n int) []float64 {
 	return out
 }
 
+// sampleGEV per Inversionsmethode: x = μ + σ·(y^(−ξ) − 1)/ξ mit y = −ln U;
+// für ξ = 0 der Gumbel-Grenzfall x = μ − σ·ln y.
+func sampleGEV(rng *rand.Rand, mu, sigma, xi float64, n int) []float64 {
+	out := make([]float64, n)
+	for i := range out {
+		u := rng.Float64()
+		for u == 0 {
+			u = rng.Float64()
+		}
+		y := -math.Log(u)
+		if xi == 0 {
+			out[i] = mu - sigma*math.Log(y)
+		} else {
+			out[i] = mu + sigma*math.Expm1(-xi*math.Log(y))/xi
+		}
+	}
+	return out
+}
+
 // sampleInverseGaussian zieht IG(μ, λ)-Daten nach Michael, Schucany und Haas
 // (erster Durchgang einer Brownschen Bewegung mit Drift).
 func sampleInverseGaussian(rng *rand.Rand, mu, lambda float64, n int) []float64 {
@@ -491,6 +510,8 @@ func TestPDFIntegratesToCDFDifference(t *testing.T) {
 		{"Gamma", Gamma{Alpha: 2.5, Beta: 1.5}, 0.1, 9},
 		{"Weibull", Weibull{Shape: 1.8, Scale: 2}, 0.05, 5},
 		{"Gumbel", Gumbel{Mu: 1, Beta: 2}, -4, 8},
+		{"GEV", GEV{Mu: 0.5, Sigma: 1.2, Xi: 0.2}, -4, 8},
+		{"GEV negative xi", GEV{Mu: 1, Sigma: 1.2, Xi: -0.25}, -4, 4},
 		{"LogLogistic", LogLogistic{Scale: 2, Shape: 3}, 0.1, 8},
 		{"InverseGaussian", InverseGaussian{Mu: 1.5, Lambda: 2}, 0.1, 8},
 		{"GeneralizedGamma", GeneralizedGamma{Shape: 1.5, Scale: 1.5, Power: 0.8}, 0.1, 6},
@@ -537,6 +558,8 @@ func TestLogPDFMatchesLogOfPDF(t *testing.T) {
 		Gamma{Alpha: 3, Beta: 2},
 		Weibull{Shape: 2, Scale: 4},
 		Gumbel{Mu: 0, Beta: 1.5},
+		GEV{Mu: 0.5, Sigma: 1.2, Xi: 0.2},
+		GEV{Mu: 1, Sigma: 1.2, Xi: -0.25},
 		LogLogistic{Scale: 2, Shape: 3},
 		InverseGaussian{Mu: 1.2, Lambda: 2},
 		GeneralizedGamma{Shape: 1.5, Scale: 1.5, Power: 0.8},

@@ -15,6 +15,7 @@ var benchFitters = []Fitter{
 	ExponentialFitter{},
 	NormalFitter{},
 	GumbelFitter{},
+	GEVFitter{},
 	GammaFitter{},
 	LogNormalFitter{},
 	LogLogisticFitter{},
@@ -105,7 +106,7 @@ func BenchmarkSelectAllModels(b *testing.B) {
 func selectAllModelsSequential(data []float64) ([]FitResult, []FitFailure, error) {
 	fitters := []Fitter{
 		WeibullFitter{}, LogNormalFitter{}, LogLogisticFitter{}, GammaFitter{}, NormalFitter{}, BetaFitter{},
-		ExponentialFitter{}, GumbelFitter{}, RayleighFitter{}, LaplaceFitter{}, LogisticFitter{},
+		ExponentialFitter{}, GumbelFitter{}, GEVFitter{}, RayleighFitter{}, LaplaceFitter{}, LogisticFitter{},
 		BurrXIIFitter{}, ParetoFitter{}, ChiSquareFitter{}, CauchyFitter{}, StudentTFitter{}, SkewNormalFitter{}, InverseGaussianFitter{},
 		GeneralizedGammaFitter{},
 	}

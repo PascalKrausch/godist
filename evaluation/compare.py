@@ -8,13 +8,15 @@ import tempfile
 
 import numpy as np
 import pandas as pd
+from scipy.optimize import minimize
 from scipy.stats import (
     beta as beta_dist,
-    burr,
+    burr12,
     expon,
     fisk,
     gamma,
     gengamma,
+    genextreme,
     gumbel_r,
     invgauss,
     kurtosis,
@@ -165,6 +167,43 @@ def compare_descriptive(go_desc, sci_desc, tol):
     return rows, mismatches
 
 
+def fit_gengamma_mle(data):
+    """Robustere SciPy-Referenz für die Generalized-Gamma-MLE.
+
+    gengamma.fit landet auf manchen Datensätzen in lokalen Optima. Daher werden
+    zusätzlich Nelder-Mead-Starts auf (log a, c, log scale) gerechnet und das
+    beste Ergebnis behalten. Liefert (loglik, a, c, scale).
+    """
+    a0, c0, _, s0 = gengamma.fit(data, floc=0)
+    starts = [
+        (a0, c0, s0),
+        (1.0, 1.0, 1.0),
+        (2.0, -5.0, 5.0),
+        (0.5, -20.0, 10.0),
+    ]
+
+    def nll(theta):
+        la, c, ls = theta
+        ll = np.sum(gengamma.logpdf(data, np.exp(la), c, loc=0, scale=np.exp(ls)))
+        return -ll if np.isfinite(ll) else np.inf
+
+    best = None
+    for a_s, c_s, s_s in starts:
+        res = minimize(
+            nll,
+            [np.log(a_s), c_s, np.log(s_s)],
+            method="Nelder-Mead",
+            options={"maxiter": 10000, "xatol": 1e-7, "fatol": 1e-7},
+        )
+        if best is None or res.fun < best.fun:
+            best = res
+
+    a = float(np.exp(best.x[0]))
+    c = float(best.x[1])
+    scale = float(np.exp(best.x[2]))
+    return -float(best.fun), a, c, scale
+
+
 def fit_scipy(name, data):
     n = len(data)
 
@@ -209,6 +248,15 @@ def fit_scipy(name, data):
         cdf = lambda x: gumbel_r.cdf(x, loc=mu, scale=scale)
         params = {"mu": mu, "beta": scale}
         k = 2
+
+    elif name == "GEV":
+        # Go-Fitter: 3-Parameter-MLE per L-BFGS; SciPy-Referenz über genextreme.fit.
+        # genextreme(c, loc, scale) entspricht Go GEV{Xi: -c, Mu: loc, Sigma: scale}.
+        c, loc, scale = genextreme.fit(data)
+        loglik = np.sum(genextreme.logpdf(data, c, loc=loc, scale=scale))
+        cdf = lambda x: genextreme.cdf(x, c, loc=loc, scale=scale)
+        params = {"mu": loc, "sigma": scale, "xi": -c}
+        k = 3
 
     elif name == "Exponential":
         if np.any(data < 0):
@@ -331,13 +379,14 @@ def fit_scipy(name, data):
         k = 2
 
     elif name == "BurrXII":
-        # Go-Fitter: eigene profilierte MLE; SciPy-Referenz über burr.fit.
-        # burr(c, d, scale) entspricht Go BurrXII{ShapeC: c, ShapeK: d, Scale: scale}.
+        # Go-Fitter: eigene profilierte MLE; SciPy-Referenz über burr12.fit.
+        # burr12(c, d, scale) entspricht Go BurrXII{ShapeC: c, ShapeK: d, Scale: scale}.
+        # Achtung: scipy.stats.burr ist eine andere (reziproke) Burr-Familie!
         if np.any(data <= 0):
             raise ValueError("BurrXII benötigt positive Daten")
-        c, d, _, scale = burr.fit(data, floc=0)
-        loglik = np.sum(burr.logpdf(data, c, d, loc=0, scale=scale))
-        cdf = lambda x: burr.cdf(x, c, d, loc=0, scale=scale)
+        c, d, _, scale = burr12.fit(data, floc=0)
+        loglik = np.sum(burr12.logpdf(data, c, d, loc=0, scale=scale))
+        cdf = lambda x: burr12.cdf(x, c, d, loc=0, scale=scale)
         params = {"scale": scale, "shape_c": c, "shape_k": d}
         k = 3
 
@@ -355,12 +404,13 @@ def fit_scipy(name, data):
     elif name == "GeneralizedGamma":
         # Go-Fitter: 3-Parameter-MLE per L-BFGS auf der in der Skala
         # profilierten Likelihood (power > 0 und power < 0); SciPy-Referenz
-        # über gengamma.fit. gengamma(a, c, scale) entspricht
+        # über fit_gengamma_mle (gengamma.fit + Multi-Start, da die
+        # Standardanpassung lokale Optima finden kann).
+        # gengamma(a, c, scale) entspricht
         # Go GeneralizedGamma{Shape: a, Power: c, Scale: scale}.
         if np.any(data <= 0):
             raise ValueError("GeneralizedGamma benötigt positive Daten")
-        a, c, _, scale = gengamma.fit(data, floc=0)
-        loglik = np.sum(gengamma.logpdf(data, a, c, loc=0, scale=scale))
+        loglik, a, c, scale = fit_gengamma_mle(data)
         cdf = lambda x: gengamma.cdf(x, a, c, loc=0, scale=scale)
         params = {"shape": a, "scale": scale, "power": c}
         k = 3
@@ -433,7 +483,7 @@ def main():
     mismatches = []
     scipy_results = {}
     for name in [
-        "Gumbel", "Beta", "LogNormal", "Gamma",
+        "Gumbel", "GEV", "Beta", "LogNormal", "Gamma",
         "Normal", "SkewNormal", "Weibull", "Exponential",
         "Laplace", "Logistic", "LogLogistic", "Rayleigh", "Pareto", "ChiSquare", "Cauchy", "StudentT",
         "BurrXII", "InverseGaussian", "GeneralizedGamma",

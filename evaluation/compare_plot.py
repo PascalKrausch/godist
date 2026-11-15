@@ -17,10 +17,11 @@ from pathlib import Path
 import numpy as np
 from scipy.stats import (
     beta as beta_dist,
-    burr,
+    burr12,
     expon,
     fisk,
     gengamma,
+    genextreme,
     invgauss,
     gamma,
     gumbel_r,
@@ -57,6 +58,9 @@ def frozen_from_params(name, params):
         return skewnorm(p["alpha"], loc=p["xi"], scale=p["omega"])
     if name == "Gumbel":
         return gumbel_r(loc=p["mu"], scale=p["beta"])
+    if name == "GEV":
+        # Go GEV{Xi} entspricht genextreme(c = -xi, loc, scale).
+        return genextreme(-p["xi"], loc=p["mu"], scale=p["sigma"])
     if name == "Exponential":
         return expon(loc=0, scale=1.0 / p["rate"])
     if name == "Laplace":
@@ -76,7 +80,7 @@ def frozen_from_params(name, params):
     if name == "StudentT":
         return student_t(p["nu"], loc=p["mu"], scale=p["scale"])
     if name == "BurrXII":
-        return burr(p["shape_c"], p["shape_k"], loc=0, scale=p["scale"])
+        return burr12(p["shape_c"], p["shape_k"], loc=0, scale=p["scale"])
     if name == "InverseGaussian":
         # Go InverseGaussian{Mu, Lambda} entspricht invgauss(Mu/Lambda, scale=Lambda).
         return invgauss(p["mu"] / p["lambda"], loc=0, scale=p["lambda"])

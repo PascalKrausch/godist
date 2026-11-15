@@ -194,6 +194,18 @@ func TestRegressionFixedDatasets(t *testing.T) {
 			metricsTol: 0.1,
 		},
 		{
+			name:       "GEV simple dataset",
+			data:       []float64{1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0},
+			fitter:     GEVFitter{},
+			wantParams: []float64{4.74515884732, 3.0576181361, -0.464716354111}, // scipy.stats.genextreme.fit (loc, scale, -c)
+			wantMetrics: FitMetrics{
+				SampleSize: 10,
+				Discarded:  0,
+			},
+			paramTol:   1e-3,
+			metricsTol: 0.1,
+		},
+		{
 			name:   "Beta bounded dataset",
 			data:   []float64{0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9},
 			fitter: BetaFitter{},

@@ -81,6 +81,14 @@ func Catalog() []Spec {
 			Fitter:      GumbelFitter{},
 		},
 		{
+			Name:        "GEV",
+			Description: "Verallgemeinerte Extremwertverteilung (GEV) mit Formparameter xi; xi = 0 ergibt die Gumbel-Verteilung",
+			Params:      []string{"mu", "sigma", "xi"},
+			Support:     "ξ-abhängig: ℝ für ξ = 0, für ξ > 0 nach unten und für ξ < 0 nach oben beschränkt",
+			FitNotes:    "für Extremwertverteilungen (z. B. Blockmaxima) gedacht; ein gutes AIC-Ranking ersetzt keine fachliche Prüfung der Datenherkunft und Modellannahmen; 3-Parameter-MLE per L-BFGS, ξ wird auf [−0.99, 5] begrenzt",
+			Fitter:      GEVFitter{},
+		},
+		{
 			Name:           "Rayleigh",
 			Description:    "Rayleigh-Verteilung, Betrag eines zweidimensionalen Vektors",
 			Params:         []string{"scale"},

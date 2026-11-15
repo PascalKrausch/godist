@@ -1,0 +1,342 @@
+package distribution
+
+import (
+	"errors"
+	"fmt"
+	"math"
+
+	"gonum.org/v1/gonum/optimize"
+	"gonum.org/v1/gonum/stat"
+)
+
+// GEV repräsentiert eine verallgemeinerte Extremwertverteilung (GEV) mit
+// Lageparameter Mu, Skalenparameter Sigma > 0 und Formparameter Xi. Die Dichte ist
+//
+//	f(x) = (1/σ) · t(x)^(ξ+1) · exp(−t(x))  mit  t(x) = (1 + ξ(x−μ)/σ)^(−1/ξ)
+//
+// für ξ ≠ 0; für ξ = 0 geht sie in die Gumbel-Verteilung über. Für ξ > 0
+// (Fréchet-Typ) ist der Träger nach unten beschränkt, für ξ < 0 (Weibull-Typ)
+// nach oben. Die Verteilung ist für Extremwerte (Blockmaxima) gedacht.
+type GEV struct {
+	Mu    float64 // Lageparameter μ
+	Sigma float64 // Skalenparameter σ > 0
+	Xi    float64 // Formparameter ξ; ξ = 0 ergibt die Gumbel-Verteilung
+}
+
+func (g GEV) valid() bool {
+	return IsFinite(g.Mu) && IsFinite(g.Sigma) && IsFinite(g.Xi) && g.Sigma > 0
+}
+
+func (g GEV) Params() []float64 {
+	return []float64{g.Mu, g.Sigma, g.Xi}
+}
+
+func (g GEV) ParamNames() []string {
+	return []string{"mu", "sigma", "xi"}
+}
+
+// gevTerms berechnet z = (x−μ)/σ und, für ξ ≠ 0, s = ln(1+ξz)/ξ sowie t = e^(−s).
+// ok ist false, wenn x außerhalb des Trägers liegt (1+ξz ≤ 0) oder die Rechnung
+// nicht endlich bleibt.
+func (g GEV) gevTerms(x float64) (z, s, t float64, ok bool) {
+	z = (x - g.Mu) / g.Sigma
+	if g.Xi == 0 {
+		return z, z, math.Exp(-z), true
+	}
+	v := g.Xi * z
+	if v <= -1 || math.IsNaN(v) {
+		return 0, 0, 0, false
+	}
+	s = math.Log1p(v) / g.Xi
+	t = math.Exp(-s)
+	if math.IsNaN(t) {
+		return 0, 0, 0, false
+	}
+	return z, s, t, true
+}
+
+func (g GEV) PDF(x float64) float64 {
+	if !g.valid() {
+		return 0
+	}
+	return math.Exp(g.LogPDF(x))
+}
+
+func (g GEV) LogPDF(x float64) float64 {
+	if !g.valid() {
+		return math.Inf(-1)
+	}
+	z, s, t, ok := g.gevTerms(x)
+	if !ok {
+		return math.Inf(-1)
+	}
+	if math.IsInf(t, 1) {
+		// t → ∞ am endlichen Trägerrand: die Dichte geht gegen 0.
+		return math.Inf(-1)
+	}
+	if g.Xi == 0 {
+		return -math.Log(g.Sigma) - z - t
+	}
+	return -math.Log(g.Sigma) - (g.Xi+1)*s - t
+}
+
+// CDF: Mit t(x) = (1+ξz)^(−1/ξ) gilt F(x) = exp(−t(x)); für ξ = 0 die Gumbel-CDF.
+func (g GEV) CDF(x float64) float64 {
+	if !g.valid() {
+		return 0
+	}
+	if g.Xi == 0 {
+		return math.Exp(-math.Exp(-(x - g.Mu) / g.Sigma))
+	}
+	v := g.Xi * (x - g.Mu) / g.Sigma
+	if v <= -1 {
+		// Außerhalb des Trägers auf der endlichen Seite.
+		if g.Xi > 0 {
+			return 0
+		}
+		return 1
+	}
+	if math.IsNaN(v) {
+		return math.NaN()
+	}
+	s := math.Log1p(v) / g.Xi
+	return math.Exp(-math.Exp(-s))
+}
+
+// Quantile invertiert die CDF: mit y = −ln p gilt x = μ + σ·(y^(−ξ) − 1)/ξ
+// für ξ ≠ 0 und x = μ − σ·ln(y) für ξ = 0. expm1 hält den Grenzfall ξ → 0 stabil.
+func (g GEV) Quantile(p float64) float64 {
+	if !g.valid() || !validProbability(p) {
+		return math.NaN()
+	}
+	if p == 0 {
+		if g.Xi > 0 {
+			return g.Mu - g.Sigma/g.Xi
+		}
+		return math.Inf(-1)
+	}
+	if p == 1 {
+		if g.Xi < 0 {
+			return g.Mu - g.Sigma/g.Xi
+		}
+		return math.Inf(1)
+	}
+	y := -math.Log(p)
+	if g.Xi == 0 {
+		return g.Mu - g.Sigma*math.Log(y)
+	}
+	return g.Mu + g.Sigma*math.Expm1(-g.Xi*math.Log(y))/g.Xi
+}
+
+// ==========================================
+// GEV FITTER
+// ==========================================
+
+// GEVFitter schätzt Mu, Sigma und Xi per Maximum-Likelihood. Die Likelihood ist
+// für ξ < −1 unbeschränkt, daher wird ξ auf [gevXiMin, gevXiMax] begrenzt. Die
+// Optimierung läuft per L-BFGS auf (μ, ln σ, ξ) mit analytischem Gradienten;
+// aus mehreren Startwerten für ξ wird das beste Ergebnis gewählt.
+type GEVFitter struct{}
+
+func (f GEVFitter) Name() string {
+	return "GEV"
+}
+
+const (
+	// gevXiMin muss strikt größer als −1 bleiben: für ξ < −1 ist die Likelihood
+	// unbeschränkt (Dichte divergiert am endlichen Trägerrand).
+	gevXiMin = -0.99
+	// gevXiMax begrenzt den Formparameter nach oben; größere Werte sind in der
+	// Praxis für Blockmaxima-Daten nicht relevant.
+	gevXiMax = 5
+	// gevXiGradFD ist die |ξ|-Schwelle, unterhalb derer die ξ-Komponente des
+	// Gradienten per zentraler Differenz geschätzt wird (analytisch 0/0-Form).
+	gevXiGradFD = 1e-4
+	gevMaxIter  = 500
+)
+
+// gevLogLik berechnet die Log-Likelihood eines GEV-Modells. ok ist false, wenn
+// ein Datenpunkt außerhalb des Trägers liegt oder die Rechnung nicht endlich bleibt.
+func gevLogLik(data []float64, mu, sigma, xi float64) (ll float64, ok bool) {
+	if !(sigma > 0) || !IsFinite(mu) || !IsFinite(sigma) || !IsFinite(xi) {
+		return 0, false
+	}
+	for _, x := range data {
+		term, finite := gevLogPDFTerm(x, mu, sigma, xi)
+		if !finite {
+			return 0, false
+		}
+		ll += term
+	}
+	return ll, IsFinite(ll)
+}
+
+// gevLogPDFTerm ist die Log-Dichte eines einzelnen Datenpunkts; finite ist false
+// außerhalb des Trägers oder bei nicht endlichem Wert (t → ∞ am Trägerrand).
+func gevLogPDFTerm(x, mu, sigma, xi float64) (term float64, finite bool) {
+	z := (x - mu) / sigma
+	if xi == 0 {
+		t := math.Exp(-z)
+		if math.IsInf(t, 1) {
+			return math.Inf(-1), false
+		}
+		return -math.Log(sigma) - z - t, true
+	}
+	v := xi * z
+	if v <= -1 || math.IsNaN(v) {
+		return 0, false
+	}
+	s := math.Log1p(v) / xi
+	t := math.Exp(-s)
+	if math.IsNaN(t) || math.IsInf(t, 1) {
+		return 0, false
+	}
+	term = -math.Log(sigma) - (xi+1)*s - t
+	return term, IsFinite(term)
+}
+
+// gevLogLikGrad liefert Log-Likelihood und Summen-Gradienten bezüglich
+// (μ, θ = ln σ, ξ). Für |ξ| < gevXiGradFD wird die ξ-Komponente per zentraler
+// Differenz geschätzt, weil die analytische Form dort eine hebbare 0/0-Stelle hat.
+func gevLogLikGrad(data []float64, mu, sigma, xi float64) (ll, gMu, gTheta, gXi float64, ok bool) {
+	if !(sigma > 0) || !IsFinite(mu) || !IsFinite(sigma) || !IsFinite(xi) {
+		return 0, 0, 0, 0, false
+	}
+	analyticXi := math.Abs(xi) >= gevXiGradFD
+	for _, x := range data {
+		z := (x - mu) / sigma
+		if xi == 0 {
+			t := math.Exp(-z)
+			if math.IsInf(t, 1) || math.IsNaN(t) {
+				return 0, 0, 0, 0, false
+			}
+			ll += -math.Log(sigma) - z - t
+			gMu += (1 - t) / sigma
+			gTheta += -1 + z*(1-t)
+			continue
+		}
+		v := xi * z
+		if v <= -1 || math.IsNaN(v) {
+			return 0, 0, 0, 0, false
+		}
+		s := math.Log1p(v) / xi
+		t := math.Exp(-s)
+		if math.IsNaN(t) || math.IsInf(t, 1) {
+			return 0, 0, 0, 0, false
+		}
+		ll += -math.Log(sigma) - (xi+1)*s - t
+		u := 1 + v
+		gMu += (xi + 1 - t) / (sigma * u)
+		gTheta += -1 + z*(xi+1-t)/u
+		if analyticXi {
+			dsDxi := (z/u - s) / xi
+			gXi += -s + (t-xi-1)*dsDxi
+		}
+	}
+	if !analyticXi {
+		const h = 1e-5
+		lp, okP := gevLogLik(data, mu, sigma, xi+h)
+		lm, okM := gevLogLik(data, mu, sigma, xi-h)
+		if !okP || !okM {
+			return 0, 0, 0, 0, false
+		}
+		gXi = (lp - lm) / (2 * h)
+	}
+	ok = IsFinite(ll) && IsFinite(gMu) && IsFinite(gTheta) && IsFinite(gXi)
+	return ll, gMu, gTheta, gXi, ok
+}
+
+func (f GEVFitter) Fit(data []float64) (ContinuousDistribution, error) {
+	cleaned := CleanDataWithZero(data)
+	if len(cleaned) < 3 {
+		return nil, fmt.Errorf("GEV benötigt mindestens drei Beobachtungen: %w", ErrFitFailed)
+	}
+
+	lo, hi := cleaned[0], cleaned[0]
+	for _, x := range cleaned {
+		lo = math.Min(lo, x)
+		hi = math.Max(hi, x)
+	}
+	if hi == lo {
+		return nil, fmt.Errorf("GEV-Parameter konnten nicht geschätzt werden: %w", ErrFitFailed)
+	}
+
+	// Startwerte: der Gumbel-Fit (ξ = 0) liefert μ und σ; als Fallback
+	// dienen Momentenwerte der Gumbel-Näherung.
+	mu0, sigma0 := 0.0, 0.0
+	if g, err := (GumbelFitter{}).Fit(cleaned); err == nil {
+		if gd, ok := g.(Gumbel); ok && gd.Beta > 0 {
+			mu0, sigma0 = gd.Mu, gd.Beta
+		}
+	}
+	if !(sigma0 > 0) || !IsFinite(mu0) || !IsFinite(sigma0) {
+		mean := stat.Mean(cleaned, nil)
+		sigma0 = math.Sqrt(stat.Variance(cleaned, nil)) * math.Sqrt(6) / math.Pi
+		mu0 = mean - 0.5772156649015329*sigma0 // Euler-Mascheroni-Konstante
+	}
+	if !(sigma0 > 0) || !IsFinite(mu0) {
+		return nil, fmt.Errorf("GEV-Startwerte ungültig: %w", ErrFitFailed)
+	}
+
+	norm := 1 / float64(len(cleaned))
+	problem := optimize.Problem{
+		Func: func(v []float64) float64 {
+			if v[2] < gevXiMin || v[2] > gevXiMax {
+				return math.Inf(1)
+			}
+			ll, _, _, _, ok := gevLogLikGrad(cleaned, v[0], math.Exp(v[1]), v[2])
+			if !ok {
+				return math.Inf(1)
+			}
+			return -ll * norm
+		},
+		Grad: func(grad, v []float64) {
+			if v[2] < gevXiMin || v[2] > gevXiMax {
+				grad[0], grad[1], grad[2] = math.Inf(1), math.Inf(1), math.Inf(1)
+				return
+			}
+			_, gMu, gTheta, gXi, ok := gevLogLikGrad(cleaned, v[0], math.Exp(v[1]), v[2])
+			if !ok {
+				grad[0], grad[1], grad[2] = math.Inf(1), math.Inf(1), math.Inf(1)
+				return
+			}
+			grad[0] = -gMu * norm
+			grad[1] = -gTheta * norm
+			grad[2] = -gXi * norm
+		},
+	}
+
+	settings := &optimize.Settings{
+		GradientThreshold: 1e-10,
+		MajorIterations:   gevMaxIter,
+		FuncEvaluations:   20000,
+		GradEvaluations:   20000,
+	}
+
+	var best GEV
+	bestLL := math.Inf(-1)
+	fitted := false
+	for _, xi0 := range []float64{0, 0.2, -0.2} {
+		initial := []float64{mu0, math.Log(sigma0), xi0}
+		result, err := optimize.Minimize(problem, initial, settings, &optimize.LBFGS{})
+		if err != nil && !errors.Is(err, optimize.ErrNoProgress) && !errors.Is(err, optimize.ErrLinesearcherFailure) {
+			continue
+		}
+		v := result.Location.X
+		dist := GEV{Mu: v[0], Sigma: math.Exp(v[1]), Xi: v[2]}
+		if !dist.valid() || dist.Xi < gevXiMin || dist.Xi > gevXiMax {
+			continue
+		}
+		// Sicherheitscheck: die Likelihood muss an allen Datenpunkten endlich sein,
+		// sonst schlägt EvaluateFit später fehl.
+		ll, ok := gevLogLik(cleaned, dist.Mu, dist.Sigma, dist.Xi)
+		if !ok || ll <= bestLL {
+			continue
+		}
+		best, bestLL, fitted = dist, ll, true
+	}
+	if !fitted {
+		return nil, fmt.Errorf("GEV-MLE-Optimierung fehlgeschlagen: %w", ErrFitFailed)
+	}
+	return best, nil
+}
