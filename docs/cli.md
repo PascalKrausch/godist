@@ -55,7 +55,7 @@ Im Hilfetext (`distfit -h`) stehen dieselben Flags mit Kurzbeschreibung.
 
 ## Verteilungen
 
-`distfit list distributions` zeigt alle 18 Kandidaten mit Parametern, Träger und Hinweisen:
+`distfit list distributions` zeigt alle 19 Kandidaten mit Parametern, Träger und Hinweisen:
 
 ```text
 $ distfit list distributions
@@ -73,7 +73,7 @@ Gumbel       mu, beta               ℝ                           Gumbel-Verteil
 ```
 
 Die vollständige Liste der Namen (Standardreihenfolge):
-`Weibull`, `LogNormal`, `Gamma`, `Normal`, `SkewNormal`, `Beta`, `Exponential`, `Gumbel`, `Rayleigh`, `Laplace`, `Logistic`, `LogLogistic`, `BurrXII`, `Pareto`, `ChiSquare`, `Cauchy`, `StudentT`, `InverseGaussian`.
+`Weibull`, `LogNormal`, `Gamma`, `Normal`, `SkewNormal`, `Beta`, `Exponential`, `Gumbel`, `Rayleigh`, `Laplace`, `Logistic`, `LogLogistic`, `BurrXII`, `Pareto`, `ChiSquare`, `Cauchy`, `StudentT`, `InverseGaussian`, `GeneralizedGamma`.
 
 Mit `-format=json` liefert der Befehl ein Array; die Felder sind `name`, `description`, `params`, `support`, `fit_notes` und `zero_inflatable`:
 

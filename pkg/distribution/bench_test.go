@@ -29,6 +29,7 @@ var benchFitters = []Fitter{
 	SkewNormalFitter{},
 	BurrXIIFitter{},
 	InverseGaussianFitter{},
+	GeneralizedGammaFitter{},
 }
 
 // benchData erzeugt exponentialverteilte Daten aus SplitMix64 (Seed 42) per Inversionsmethode.
@@ -106,6 +107,7 @@ func selectAllModelsSequential(data []float64) ([]FitResult, []FitFailure, error
 		WeibullFitter{}, LogNormalFitter{}, LogLogisticFitter{}, GammaFitter{}, NormalFitter{}, BetaFitter{},
 		ExponentialFitter{}, GumbelFitter{}, RayleighFitter{}, LaplaceFitter{}, LogisticFitter{},
 		BurrXIIFitter{}, ParetoFitter{}, ChiSquareFitter{}, CauchyFitter{}, StudentTFitter{}, SkewNormalFitter{}, InverseGaussianFitter{},
+		GeneralizedGammaFitter{},
 	}
 	var results []FitResult
 	var failures []FitFailure

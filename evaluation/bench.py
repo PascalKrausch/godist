@@ -31,6 +31,7 @@ from scipy.stats import (
     expon,
     fisk,
     gamma,
+    gengamma,
     gumbel_r,
     invgauss,
     laplace,
@@ -56,7 +57,7 @@ GOLDEN_GAMMA = 0x9E3779B97F4A7C15
 NAMES = [
     "Beta", "Exponential", "Normal", "SkewNormal", "Gumbel", "Gamma",
     "LogNormal", "LogLogistic", "Weibull", "Laplace", "Logistic", "Rayleigh", "Pareto", "ChiSquare", "Cauchy", "StudentT",
-    "BurrXII", "InverseGaussian",
+    "BurrXII", "InverseGaussian", "GeneralizedGamma",
 ]
 
 
@@ -103,6 +104,7 @@ FIT_CALLS = {
     "StudentT": lambda d: student_t.fit(d),
     "BurrXII": lambda d: burr.fit(d, floc=0),
     "InverseGaussian": lambda d: invgauss.fit(d, floc=0),
+    "GeneralizedGamma": lambda d: gengamma.fit(d, floc=0),
 }
 
 

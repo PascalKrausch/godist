@@ -5,7 +5,7 @@
 > **Projektstatus: noch nicht produktiv verwenden.**
 > Vor einem produktiven Einsatz müssen insbesondere Parameterschätzung, numerische Stabilität, Gütemaße, Eingabevalidierung und Testabdeckung systematisch überprüft werden.
 >
-> **Aktueller Stand:** 18 Verteilungen sind implementiert. Die Tests in `pkg/distribution`, `internal/cli` und `cmd/distfit` laufen grün (`go test ./...`). Der CLI-Prototyp verarbeitet reale Datensätze (z. B. `winequality-red.csv`). Nullwerte werden strikt behandelt (siehe [Methodik])
+> **Aktueller Stand:** 19 Verteilungen sind implementiert. Die Tests in `pkg/distribution`, `internal/cli` und `cmd/distfit` laufen grün (`go test ./...`). Der CLI-Prototyp verarbeitet reale Datensätze (z. B. `winequality-red.csv`). Nullwerte werden strikt behandelt (siehe [Methodik])
 
 ## Ziele
 
@@ -39,6 +39,9 @@
 | StudentT | `mu`, `scale`, `nu` | ℝ |
 | SkewNormal | `xi`, `omega`, `alpha` | ℝ |
 | InverseGaussian | `mu`, `lambda` | (0, ∞) |
+| GeneralizedGamma | `shape`, `scale`, `power` | (0, ∞) |
+
+GeneralizedGamma (verallgemeinerte Gamma-Verteilung nach Stacy): `power` ist der Potenzparameter; `power = 1` ergibt die Gamma-Verteilung, `shape = 1` die Weibull-Verteilung. `power < 0` ist zulässig. Die drei Parameter werden per L-BFGS auf der in der Skala profilierten Likelihood geschätzt; beide Vorzeichen von `power` werden optimiert.
 
 Student-t: ν wird per Profil-Likelihood auf [0.1, 10⁹] begrenzt. Nahezu normalverteilte Daten erhalten daher sehr große ν-Werte, die an SciPy angenähert sind (White-Wine: ν ≈ 3.5·10⁷ statt 7.7·10⁸, AIC-Abweichung 0.00).
 
@@ -54,6 +57,7 @@ Die Verteilungen mit positivem Träger behandeln Nullwerte derzeit **streng**: E
 - **LogNormal:** scheitert bei jedem Nullwert, da `log(0)` nicht definiert ist.
 - **LogLogistic:** scheitert bei jedem Nullwert, da `log(0)` nicht definiert ist (wie LogNormal).
 - **BurrXII:** scheitert bei jedem Nullwert, da `log(0)` nicht definiert ist. Fits, bei denen c oder k über 10⁶ laufen (Grenzfall, z. B. exponentialähnliche Daten), werden ebenfalls abgelehnt, da dann kein inneres Maximum der Likelihood existiert.
+- **GeneralizedGamma:** scheitert bei jedem Nullwert, da `log(0)` nicht definiert ist.
 - **Gamma und Weibull:** scheitern bei jedem Nullwert. Die Dichte an der Stelle 0 ist für Formparameter ungleich 1 entweder 0 oder unendlich. Für Formparameter genau 1 entspricht die Verteilung der Exponentialverteilung, die Nullwerte behält.
 - **Rayleigh:** Nullen werden bei der Schätzung ignoriert, die Dichte an der Stelle 0 ist aber 0. Der Kandidat scheitert daher bei jedem Nullwert.
 - **ChiSquare:** Der Träger ist [0, ∞). Nullwerte liegen für k > 0 am Rand des Trägers und werden wie bei Gamma abgelehnt (Fast-Fail).
@@ -61,7 +65,7 @@ Die Verteilungen mit positivem Träger behandeln Nullwerte derzeit **streng**: E
 - **Normal, SkewNormal, Gumbel, Laplace, Logistic:** behalten Nullwerte (`CleanDataWithZero`) und sind von dieser Regel nicht betroffen.
 - **Beta:** Der Träger wird aus den Daten abgeleitet ( Ob Nullwerte scheitern, entscheidet die Dichteprüfung.
 
-**Negative Werte** werden ebenfalls über die Trägerprüfung behandelt: Exponential, Gamma, Weibull, LogNormal, LogLogistic, BurrXII, Rayleigh, Pareto und ChiSquare lehnen jeden negativen Wert mit `ErrNegativeValues` ab. Normal, SkewNormal, Gumbel, Laplace, Cauchy und StudentT sowie Beta (Träger aus den Daten) verarbeiten negative Werte. Alle Kandidaten werten so dieselbe Stichprobe aus.
+**Negative Werte** werden ebenfalls über die Trägerprüfung behandelt: Exponential, Gamma, Weibull, LogNormal, LogLogistic, BurrXII, Rayleigh, Pareto, ChiSquare und GeneralizedGamma lehnen jeden negativen Wert mit `ErrNegativeValues` ab. Normal, SkewNormal, Gumbel, Laplace, Cauchy und StudentT sowie Beta (Träger aus den Daten) verarbeiten negative Werte. Alle Kandidaten werten so dieselbe Stichprobe aus.
 
 Ein fehlgeschlagener Kandidat wird nicht gerankt. Die Nullzahl ist damit ein bewusst sichtbarer Befund und kein stiller Datenverlust.
 
@@ -132,7 +136,6 @@ Geplant sind derzeit:
 
 - Generalized Extreme value (GEV)
 - SkewNormal
-- Generalized Gammas
 - Burr XII
 
 ### Dokumentation

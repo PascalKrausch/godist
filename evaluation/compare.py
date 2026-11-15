@@ -14,6 +14,7 @@ from scipy.stats import (
     expon,
     fisk,
     gamma,
+    gengamma,
     gumbel_r,
     invgauss,
     kurtosis,
@@ -351,6 +352,19 @@ def fit_scipy(name, data):
         params = {"mu": scale * mu_s, "lambda": scale}
         k = 2
 
+    elif name == "GeneralizedGamma":
+        # Go-Fitter: 3-Parameter-MLE per L-BFGS auf der in der Skala
+        # profilierten Likelihood (power > 0 und power < 0); SciPy-Referenz
+        # über gengamma.fit. gengamma(a, c, scale) entspricht
+        # Go GeneralizedGamma{Shape: a, Power: c, Scale: scale}.
+        if np.any(data <= 0):
+            raise ValueError("GeneralizedGamma benötigt positive Daten")
+        a, c, _, scale = gengamma.fit(data, floc=0)
+        loglik = np.sum(gengamma.logpdf(data, a, c, loc=0, scale=scale))
+        cdf = lambda x: gengamma.cdf(x, a, c, loc=0, scale=scale)
+        params = {"shape": a, "scale": scale, "power": c}
+        k = 3
+
     else:
         raise ValueError(f"Unbekannte Verteilung: {name}")
 
@@ -422,7 +436,7 @@ def main():
         "Gumbel", "Beta", "LogNormal", "Gamma",
         "Normal", "SkewNormal", "Weibull", "Exponential",
         "Laplace", "Logistic", "LogLogistic", "Rayleigh", "Pareto", "ChiSquare", "Cauchy", "StudentT",
-        "BurrXII", "InverseGaussian",
+        "BurrXII", "InverseGaussian", "GeneralizedGamma",
     ]:
         try:
             scipy_results[name] = fit_scipy(name, data)

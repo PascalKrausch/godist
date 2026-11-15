@@ -404,6 +404,18 @@ func TestFittersRecoverKnownParameters(t *testing.T) {
 		assertRelative(t, "Mu", g.Mu, 3, tol)
 		assertRelative(t, "Lambda", g.Lambda, 1.5, 0.1)
 	})
+
+	t.Run("GeneralizedGamma", func(t *testing.T) {
+		data := sampleGeneralizedGamma(rng, GeneralizedGamma{Shape: 1.8, Scale: 2, Power: 0.75}, sampleSize)
+		dist, err := GeneralizedGammaFitter{}.Fit(data)
+		if err != nil {
+			t.Fatal(err)
+		}
+		g := dist.(GeneralizedGamma)
+		assertRelative(t, "Shape", g.Shape, 1.8, 0.15)
+		assertRelative(t, "Scale", g.Scale, 2, 0.15)
+		assertRelative(t, "Power", g.Power, 0.75, 0.15)
+	})
 }
 
 // Anforderung: AIC = 2k − 2·LL und BIC = k·ln(n) − 2·LL mit k = Anzahl der
@@ -481,6 +493,8 @@ func TestPDFIntegratesToCDFDifference(t *testing.T) {
 		{"Gumbel", Gumbel{Mu: 1, Beta: 2}, -4, 8},
 		{"LogLogistic", LogLogistic{Scale: 2, Shape: 3}, 0.1, 8},
 		{"InverseGaussian", InverseGaussian{Mu: 1.5, Lambda: 2}, 0.1, 8},
+		{"GeneralizedGamma", GeneralizedGamma{Shape: 1.5, Scale: 1.5, Power: 0.8}, 0.1, 6},
+		{"GeneralizedGamma negative power", GeneralizedGamma{Shape: 2, Scale: 1, Power: -0.8}, 0.5, 8},
 	}
 
 	const steps = 20000
@@ -525,6 +539,8 @@ func TestLogPDFMatchesLogOfPDF(t *testing.T) {
 		Gumbel{Mu: 0, Beta: 1.5},
 		LogLogistic{Scale: 2, Shape: 3},
 		InverseGaussian{Mu: 1.2, Lambda: 2},
+		GeneralizedGamma{Shape: 1.5, Scale: 1.5, Power: 0.8},
+		GeneralizedGamma{Shape: 2, Scale: 1, Power: -0.6},
 	}
 	points := []float64{0.1, 0.5, 1, 2, 3.5, 7}
 

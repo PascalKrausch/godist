@@ -160,6 +160,15 @@ func Catalog() []Spec {
 			ZeroInflatable: true,
 			Fitter:         InverseGaussianFitter{},
 		},
+		{
+			Name:           "GeneralizedGamma",
+			Description:    "Verallgemeinerte Gamma-Verteilung (Stacy) mit Form-, Skalen- und Potenzparameter; enthält Gamma (power = 1) und Weibull (shape = 1)",
+			Params:         []string{"shape", "scale", "power"},
+			Support:        "(0, ∞)",
+			FitNotes:       "3-Parameter-MLE per L-BFGS auf der in der Skala profilierten Likelihood; power > 0 und power < 0 werden beide optimiert; scheitert bei Nullwerten",
+			ZeroInflatable: true,
+			Fitter:         GeneralizedGammaFitter{},
+		},
 	}
 }
 

@@ -43,7 +43,7 @@ func TestSelectionFlagErrorsExitTwo(t *testing.T) {
 		"distribution with include":  {"fit", path, "-distribution=gamma", "-include=weibull"},
 		"include with exclude":       {"fit", path, "-all", "-include=weibull", "-exclude=gamma"},
 		"zero-inflated not capable":  {"fit", path, "-distribution=normal", "-zero-inflated"},
-		"exclude removes everything": {"fit", path, "-all", "-exclude=Weibull,LogNormal,LogLogistic,BurrXII,Gamma,Normal,Beta,Exponential,Gumbel,Rayleigh,Laplace,Logistic,Pareto,ChiSquare,Cauchy,StudentT,SkewNormal,InverseGaussian"},
+		"exclude removes everything": {"fit", path, "-all", "-exclude=Weibull,LogNormal,LogLogistic,BurrXII,Gamma,Normal,Beta,Exponential,Gumbel,Rayleigh,Laplace,Logistic,Pareto,ChiSquare,Cauchy,StudentT,SkewNormal,InverseGaussian,GeneralizedGamma"},
 	}
 	for name, args := range cases {
 		t.Run(name, func(t *testing.T) {

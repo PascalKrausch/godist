@@ -20,6 +20,7 @@ from scipy.stats import (
     burr,
     expon,
     fisk,
+    gengamma,
     invgauss,
     gamma,
     gumbel_r,
@@ -79,6 +80,8 @@ def frozen_from_params(name, params):
     if name == "InverseGaussian":
         # Go InverseGaussian{Mu, Lambda} entspricht invgauss(Mu/Lambda, scale=Lambda).
         return invgauss(p["mu"] / p["lambda"], loc=0, scale=p["lambda"])
+    if name == "GeneralizedGamma":
+        return gengamma(p["shape"], p["power"], loc=0, scale=p["scale"])
     if name == "Beta":
         lo, hi = p["min"], p["max"]
         return beta_dist(p["alpha"], p["beta"], loc=lo, scale=hi - lo)

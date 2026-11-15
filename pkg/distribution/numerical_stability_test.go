@@ -43,6 +43,11 @@ func TestNumericalStabilityVerySmallValues(t *testing.T) {
 			fitter: InverseGaussianFitter{},
 			data:   []float64{1e-10, 2e-10, 3e-10, 4e-10, 5e-10, 1e-9, 2e-9, 5e-9},
 		},
+		{
+			name:   "GeneralizedGamma with very small values",
+			fitter: GeneralizedGammaFitter{},
+			data:   []float64{1e-10, 2e-10, 3e-10, 4e-10, 5e-10, 1e-9, 2e-9, 5e-9},
+		},
 	}
 
 	for _, tt := range tests {
@@ -62,6 +67,10 @@ func TestNumericalStabilityVerySmallValues(t *testing.T) {
 				// Mu bei LogNormal kann negativ sein, andere Parameter sollten positiv sein
 				if tt.name == "LogNormal with very small values" && i == 0 {
 					// Mu darf negativ sein
+					continue
+				}
+				// Power bei GeneralizedGamma darf negativ sein (d < 0 ist ein gültiger Fall)
+				if tt.name == "GeneralizedGamma with very small values" && i == 2 {
 					continue
 				}
 				if p < 0 {
@@ -151,6 +160,11 @@ func TestNumericalStabilityVeryLargeValues(t *testing.T) {
 			fitter: InverseGaussianFitter{},
 			data:   []float64{1e8, 2e8, 3e8, 4e8, 5e8, 1e9, 2e9, 5e9},
 		},
+		{
+			name:   "GeneralizedGamma with very large values",
+			fitter: GeneralizedGammaFitter{},
+			data:   []float64{1e8, 2e8, 3e8, 4e8, 5e8, 1e9, 2e9, 5e9},
+		},
 	}
 
 	for _, tt := range tests {
@@ -201,6 +215,7 @@ func TestNumericalStabilityWideRangeValues(t *testing.T) {
 		{"LogLogistic", LogLogisticFitter{}},
 		{"Gamma", GammaFitter{}},
 		{"Weibull", WeibullFitter{}},
+		{"GeneralizedGamma", GeneralizedGammaFitter{}},
 	}
 
 	for _, tt := range tests {
@@ -313,6 +328,18 @@ func TestNumericalStabilityParametersNearBoundaries(t *testing.T) {
 			name: "InverseGaussian with very large lambda",
 			dist: InverseGaussian{Mu: 1, Lambda: 1e10},
 		},
+		{
+			name: "GeneralizedGamma with very small power",
+			dist: GeneralizedGamma{Shape: 2, Scale: 1, Power: 1e-3},
+		},
+		{
+			name: "GeneralizedGamma with very large power",
+			dist: GeneralizedGamma{Shape: 0.5, Scale: 2, Power: 50},
+		},
+		{
+			name: "GeneralizedGamma with negative power",
+			dist: GeneralizedGamma{Shape: 1.5, Scale: 1, Power: -3},
+		},
 	}
 
 	for _, tt := range tests {
@@ -389,6 +416,16 @@ func TestNumericalStabilityOverflowUnderflow(t *testing.T) {
 			dist: LogLogistic{Scale: 1, Shape: 2},
 			x:    1e10,
 		},
+		{
+			name: "GeneralizedGamma PDF far in the tail",
+			dist: GeneralizedGamma{Shape: 2, Scale: 1, Power: 2},
+			x:    1000,
+		},
+		{
+			name: "GeneralizedGamma negative power PDF with large x",
+			dist: GeneralizedGamma{Shape: 1.5, Scale: 1, Power: -0.8},
+			x:    1e10,
+		},
 	}
 
 	for _, tt := range tests {
@@ -428,6 +465,7 @@ func TestNumericalStabilityZeroValues(t *testing.T) {
 		{"LogLogistic", LogLogisticFitter{}},
 		{"SkewNormal", SkewNormalFitter{}},
 		{"Weibull", WeibullFitter{}},
+		{"GeneralizedGamma", GeneralizedGammaFitter{}},
 	}
 
 	for _, tt := range tests {
@@ -474,6 +512,7 @@ func TestNumericalStabilityNearZeroParameters(t *testing.T) {
 		{"LogLogistic", LogLogisticFitter{}},
 		{"SkewNormal", SkewNormalFitter{}},
 		{"Weibull", WeibullFitter{}},
+		{"GeneralizedGamma", GeneralizedGammaFitter{}},
 	}
 
 	for _, tt := range tests {

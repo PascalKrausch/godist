@@ -139,6 +139,14 @@ func TestDistributionFunctions(t *testing.T) {
 			pdf:  1 / math.Sqrt(2*math.Pi),
 			cdf:  0.5 + math.Exp(2)*0.5*math.Erfc(math.Sqrt2),
 		},
+		{
+			// Shape = 1, Power = 2 ist identisch mit Weibull{Shape: 2, Scale: 3}.
+			name: "GeneralizedGamma",
+			dist: GeneralizedGamma{Shape: 1, Scale: 3, Power: 2},
+			x:    3,
+			pdf:  2 / (3 * math.E),
+			cdf:  1 - 1/math.E,
+		},
 	}
 
 	for _, tt := range tests {
@@ -179,6 +187,8 @@ func TestDistributionQuantileBoundaries(t *testing.T) {
 		{"LogNormal", LogNormal{Mu: 0, Sigma: 1}, 0, math.Inf(1)},
 		{"Weibull", Weibull{Shape: 2, Scale: 3}, 0, math.Inf(1)},
 		{"InverseGaussian", InverseGaussian{Mu: 2, Lambda: 3}, 0, math.Inf(1)},
+		{"GeneralizedGamma", GeneralizedGamma{Shape: 2, Scale: 1, Power: 0.7}, 0, math.Inf(1)},
+		{"GeneralizedGamma negative power", GeneralizedGamma{Shape: 1.5, Scale: 1, Power: -0.6}, 0, math.Inf(1)},
 	}
 
 	for _, tt := range tests {
@@ -221,6 +231,8 @@ func TestDistributionQuantileRoundTrip(t *testing.T) {
 		{"LogNormal", LogNormal{Mu: 0, Sigma: 0.8}},
 		{"Weibull", Weibull{Shape: 1.7, Scale: 3}},
 		{"InverseGaussian", InverseGaussian{Mu: 1.5, Lambda: 2}},
+		{"GeneralizedGamma", GeneralizedGamma{Shape: 1.5, Scale: 2, Power: 0.8}},
+		{"GeneralizedGamma negative power", GeneralizedGamma{Shape: 1.2, Scale: 0.7, Power: -0.6}},
 	}
 	probs := []float64{0.001, 0.01, 0.1, 0.25, 0.5, 0.75, 0.9, 0.99, 0.999}
 
@@ -272,6 +284,9 @@ func TestDistributionSupportBoundaries(t *testing.T) {
 		{"Weibull at zero", Weibull{Shape: 2, Scale: 3}, 0, 0},
 		{"InverseGaussian at zero", InverseGaussian{Mu: 1, Lambda: 2}, 0, 0},
 		{"InverseGaussian below zero", InverseGaussian{Mu: 1, Lambda: 2}, -0.5, 0},
+		{"GeneralizedGamma at zero", GeneralizedGamma{Shape: 2, Scale: 1, Power: 2}, 0, 0},
+		{"GeneralizedGamma below zero", GeneralizedGamma{Shape: 2, Scale: 1, Power: 2}, -0.5, 0},
+		{"GeneralizedGamma negative power at zero", GeneralizedGamma{Shape: 1.5, Scale: 1, Power: -0.6}, 0, 0},
 	}
 
 	for _, tt := range tests {
@@ -325,6 +340,8 @@ func TestDistributionCDFProperties(t *testing.T) {
 		{"LogNormal", LogNormal{Mu: 0, Sigma: 1}, []float64{-1, 0, 0.25, 1, 3, 10}},
 		{"Weibull", Weibull{Shape: 2, Scale: 3}, []float64{-1, 0, 0.25, 1, 3, 10}},
 		{"InverseGaussian", InverseGaussian{Mu: 1, Lambda: 2}, []float64{-1, 0, 0.25, 1, 3, 10}},
+		{"GeneralizedGamma", GeneralizedGamma{Shape: 1.5, Scale: 1.5, Power: 0.8}, []float64{-1, 0, 0.25, 1, 3, 10}},
+		{"GeneralizedGamma negative power", GeneralizedGamma{Shape: 1.5, Scale: 1.5, Power: -0.6}, []float64{-1, 0, 0.25, 1, 3, 10}},
 	}
 
 	for _, tt := range tests {
@@ -377,6 +394,9 @@ func TestDistributionRejectsInvalidParameters(t *testing.T) {
 		{"Weibull", Weibull{Shape: 2, Scale: 0}},
 		{"InverseGaussian", InverseGaussian{Mu: 1, Lambda: 0}},
 		{"InverseGaussian mu", InverseGaussian{Mu: 0, Lambda: 1}},
+		{"GeneralizedGamma shape", GeneralizedGamma{Shape: 0, Scale: 1, Power: 1}},
+		{"GeneralizedGamma scale", GeneralizedGamma{Shape: 2, Scale: 0, Power: 1}},
+		{"GeneralizedGamma power", GeneralizedGamma{Shape: 2, Scale: 1, Power: 0}},
 	}
 
 	for _, tt := range tests {
