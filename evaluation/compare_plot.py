@@ -17,8 +17,10 @@ from pathlib import Path
 import numpy as np
 from scipy.stats import (
     beta as beta_dist,
+    burr,
     expon,
     fisk,
+    invgauss,
     gamma,
     gumbel_r,
     laplace,
@@ -30,6 +32,7 @@ from scipy.stats import (
     t as student_t,
     cauchy,
     rayleigh,
+    skewnorm,
     weibull_min,
 )
 
@@ -49,6 +52,8 @@ def frozen_from_params(name, params):
         return lognorm(p["sigma"], loc=0, scale=np.exp(p["mu"]))
     if name == "Normal":
         return norm(loc=p["mu"], scale=p["sigma"])
+    if name == "SkewNormal":
+        return skewnorm(p["alpha"], loc=p["xi"], scale=p["omega"])
     if name == "Gumbel":
         return gumbel_r(loc=p["mu"], scale=p["beta"])
     if name == "Exponential":
@@ -69,6 +74,11 @@ def frozen_from_params(name, params):
         return cauchy(loc=p["mu"], scale=p["scale"])
     if name == "StudentT":
         return student_t(p["nu"], loc=p["mu"], scale=p["scale"])
+    if name == "BurrXII":
+        return burr(p["shape_c"], p["shape_k"], loc=0, scale=p["scale"])
+    if name == "InverseGaussian":
+        # Go InverseGaussian{Mu, Lambda} entspricht invgauss(Mu/Lambda, scale=Lambda).
+        return invgauss(p["mu"] / p["lambda"], loc=0, scale=p["lambda"])
     if name == "Beta":
         lo, hi = p["min"], p["max"]
         return beta_dist(p["alpha"], p["beta"], loc=lo, scale=hi - lo)

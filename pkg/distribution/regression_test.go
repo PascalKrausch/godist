@@ -148,6 +148,30 @@ func TestRegressionFixedDatasets(t *testing.T) {
 			metricsTol: 0.1,
 		},
 		{
+			name:       "SkewNormal symmetric dataset",
+			data:       []float64{1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0},
+			fitter:     SkewNormalFitter{},
+			wantParams: []float64{5.5, 2.8722813232690148, 0}, // alpha = 0: wie Normal-MLE
+			wantMetrics: FitMetrics{
+				SampleSize: 10,
+				Discarded:  0,
+			},
+			paramTol:   1e-6,
+			metricsTol: 0.1,
+		},
+		{
+			name:       "SkewNormal skewed dataset",
+			data:       []float64{-7.0, -2.1, -0.5, 0.3, 1.0, 1.2, 2.2, 3.5, 4.0, 9.5, 0.8, -1.4},
+			fitter:     SkewNormalFitter{},
+			wantParams: []float64{-1.822069652529388, 4.689321697858984, 1.119306144500429}, // scipy.stats.skewnorm.fit (alpha, xi, omega)
+			wantMetrics: FitMetrics{
+				SampleSize: 12,
+				Discarded:  0,
+			},
+			paramTol:   1e-6,
+			metricsTol: 0.1,
+		},
+		{
 			name:   "InverseGaussian simple dataset",
 			data:   []float64{1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0},
 			fitter: InverseGaussianFitter{},

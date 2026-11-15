@@ -50,6 +50,14 @@ func Catalog() []Spec {
 			Fitter:      NormalFitter{},
 		},
 		{
+			Name:        "SkewNormal",
+			Description: "Schiefe Normalverteilung (Azzalini) mit Schiefeparameter alpha; alpha = 0 ergibt die Normalverteilung",
+			Params:      []string{"xi", "omega", "alpha"},
+			Support:     "ℝ",
+			FitNotes:    "3-Parameter-MLE per L-BFGS; für |alpha| → ∞ nähert sich die Verteilung der halbseitigen Normalverteilung",
+			Fitter:      SkewNormalFitter{},
+		},
+		{
 			Name:        "Beta",
 			Description: "Beta-Verteilung auf einem endlichen Intervall",
 			Params:      []string{"alpha", "beta", "min", "max"},

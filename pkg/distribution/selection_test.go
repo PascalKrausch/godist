@@ -63,7 +63,7 @@ func TestSelectFittersRejectsInvalidSelections(t *testing.T) {
 		{"unknown include", []string{"wibull"}, nil, "unbekannte Verteilung"},
 		{"unknown exclude", nil, []string{"wibull"}, "unbekannte Verteilung"},
 		{"include and exclude", []string{"weibull"}, []string{"gamma"}, "schließen sich aus"},
-		{"everything excluded", nil, []string{"Weibull", "LogNormal", "LogLogistic", "BurrXII", "Gamma", "Normal", "Beta", "Exponential", "Gumbel", "Rayleigh", "Laplace", "Logistic", "Pareto", "ChiSquare", "Cauchy", "StudentT", "InverseGaussian"}, "keine Verteilung übrig"},
+		{"everything excluded", nil, []string{"Weibull", "LogNormal", "LogLogistic", "BurrXII", "Gamma", "Normal", "Beta", "Exponential", "Gumbel", "Rayleigh", "Laplace", "Logistic", "Pareto", "ChiSquare", "Cauchy", "StudentT", "SkewNormal", "InverseGaussian"}, "keine Verteilung übrig"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

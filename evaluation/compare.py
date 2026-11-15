@@ -27,6 +27,7 @@ from scipy.stats import (
     cauchy,
     rayleigh,
     skew,
+    skewnorm,
     weibull_min,
 )
 
@@ -254,6 +255,15 @@ def fit_scipy(name, data):
         params = {"mu": mu, "scale": scale}
         k = 2
 
+    elif name == "SkewNormal":
+        # Go-Fitter: 3-Parameter-MLE per L-BFGS; SciPy-Referenz über skewnorm.fit.
+        # skewnorm(a, loc, scale) entspricht Go SkewNormal{Alpha: a, Xi: loc, Omega: scale}.
+        a, loc, scale = skewnorm.fit(data)
+        loglik = np.sum(skewnorm.logpdf(data, a, loc=loc, scale=scale))
+        cdf = lambda x: skewnorm.cdf(x, a, loc=loc, scale=scale)
+        params = {"xi": loc, "omega": scale, "alpha": a}
+        k = 3
+
     elif name == "StudentT":
         # Go-Fitter: ν per Profil-Likelihood, μ und s per EM; SciPy-Referenz über t.fit.
         df, mu, scale = student_t.fit(data)
@@ -410,7 +420,7 @@ def main():
     scipy_results = {}
     for name in [
         "Gumbel", "Beta", "LogNormal", "Gamma",
-        "Normal", "Weibull", "Exponential",
+        "Normal", "SkewNormal", "Weibull", "Exponential",
         "Laplace", "Logistic", "LogLogistic", "Rayleigh", "Pareto", "ChiSquare", "Cauchy", "StudentT",
         "BurrXII", "InverseGaussian",
     ]:

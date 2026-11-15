@@ -22,6 +22,7 @@ func TestFittersFitValidData(t *testing.T) {
 		{"Beta", BetaFitter{}, 4, false},
 		{"Exponential", ExponentialFitter{}, 1, true},
 		{"Normal", NormalFitter{}, 2, false},
+		{"SkewNormal", SkewNormalFitter{}, 3, false},
 		{"Gumbel", GumbelFitter{}, 2, false},
 		{"Gamma", GammaFitter{}, 2, true},
 		{"LogNormal", LogNormalFitter{}, 2, true},
@@ -89,6 +90,8 @@ func TestFittersRejectInsufficientOrInvalidData(t *testing.T) {
 		{"Beta needs at least three observations", BetaFitter{}, []float64{1, 2}},
 		{"Exponential needs a positive mean", ExponentialFitter{}, []float64{0}},
 		{"Normal needs variation", NormalFitter{}, []float64{1}},
+		{"SkewNormal needs at least three observations", SkewNormalFitter{}, []float64{1, 2}},
+		{"SkewNormal needs varying observations", SkewNormalFitter{}, []float64{2, 2, 2}},
 		{"Gumbel needs at least two observations", GumbelFitter{}, []float64{1}},
 		{"Gamma needs varying observations", GammaFitter{}, []float64{1}},
 		{"LogNormal needs varying observations", LogNormalFitter{}, []float64{1}},
@@ -386,6 +389,39 @@ func TestStudentTFitterSatisfiesScoreEquations(t *testing.T) {
 	}
 	if math.Abs(scaleScore)/n > 1e-6 {
 		t.Errorf("Scale-Score = %g, want ~0", scaleScore)
+	}
+}
+
+// Anforderung: Der SkewNormal-Fitter erfüllt die Score-Gleichungen der Likelihood:
+// Σ(z − αλ(αz)) = 0 für ξ, Σ(z² − z·αλ(αz) − 1) = 0 für log ω und Σ z·λ(αz) = 0 für α,
+// mit z = (x − ξ)/ω und λ der Mills-Ratio.
+func TestSkewNormalFitterSatisfiesScoreEquations(t *testing.T) {
+	rng := newTestRNG()
+	const alpha = 3.0
+	delta := alpha / math.Sqrt(1+alpha*alpha)
+	s := 1 / math.Sqrt(1+alpha*alpha)
+	data := make([]float64, 5000)
+	for i := range data {
+		data[i] = 1 + 2*(delta*math.Abs(rng.NormFloat64())+s*rng.NormFloat64())
+	}
+	dist, err := SkewNormalFitter{}.Fit(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sn := dist.(SkewNormal)
+	n := float64(len(data))
+	var gXi, gTheta, gAlpha float64
+	for _, x := range data {
+		z := (x - sn.Xi) / sn.Omega
+		lam := millsRatio(sn.Alpha * z)
+		gXi += z - sn.Alpha*lam
+		gTheta += z*z - z*sn.Alpha*lam - 1
+		gAlpha += z * lam
+	}
+	for name, g := range map[string]float64{"Xi": gXi, "logOmega": gTheta, "Alpha": gAlpha} {
+		if math.Abs(g)/n > 1e-5 {
+			t.Errorf("%s-Score = %g, want ~0", name, g)
+		}
 	}
 }
 

@@ -26,6 +26,7 @@ var benchFitters = []Fitter{
 	ChiSquareFitter{},
 	CauchyFitter{},
 	StudentTFitter{},
+	SkewNormalFitter{},
 	BurrXIIFitter{},
 	InverseGaussianFitter{},
 }
@@ -104,7 +105,7 @@ func selectAllModelsSequential(data []float64) ([]FitResult, []FitFailure, error
 	fitters := []Fitter{
 		WeibullFitter{}, LogNormalFitter{}, LogLogisticFitter{}, GammaFitter{}, NormalFitter{}, BetaFitter{},
 		ExponentialFitter{}, GumbelFitter{}, RayleighFitter{}, LaplaceFitter{}, LogisticFitter{},
-		BurrXIIFitter{}, ParetoFitter{}, ChiSquareFitter{}, CauchyFitter{}, StudentTFitter{}, InverseGaussianFitter{},
+		BurrXIIFitter{}, ParetoFitter{}, ChiSquareFitter{}, CauchyFitter{}, StudentTFitter{}, SkewNormalFitter{}, InverseGaussianFitter{},
 	}
 	var results []FitResult
 	var failures []FitFailure

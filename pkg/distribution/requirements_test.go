@@ -143,6 +143,18 @@ func sampleLogLogistic(rng *rand.Rand, alpha, beta float64, n int) []float64 {
 	return out
 }
 
+// sampleSkewNormal zieht SN(ξ, ω, α)-Daten über die Darstellung
+// X = ξ + ω(δ|Z₀| + √(1−δ²)·Z₁) mit δ = α/√(1+α²) und unabhängigen Standardnormalen.
+func sampleSkewNormal(rng *rand.Rand, xi, omega, alpha float64, n int) []float64 {
+	delta := alpha / math.Sqrt(1+alpha*alpha)
+	s := 1 / math.Sqrt(1+alpha*alpha)
+	out := make([]float64, n)
+	for i := range out {
+		out[i] = xi + omega*(delta*math.Abs(rng.NormFloat64())+s*rng.NormFloat64())
+	}
+	return out
+}
+
 func sampleBeta(rng *rand.Rand, alpha, betaParam float64, n int) []float64 {
 	out := make([]float64, n)
 
@@ -370,6 +382,18 @@ func TestFittersRecoverKnownParameters(t *testing.T) {
 		assertRelative(t, "Nu", st.Nu, nu, 0.25)
 	})
 
+	t.Run("SkewNormal", func(t *testing.T) {
+		data := sampleSkewNormal(rng, 1, 2, 3, sampleSize)
+		dist, err := SkewNormalFitter{}.Fit(data)
+		if err != nil {
+			t.Fatal(err)
+		}
+		sn := dist.(SkewNormal)
+		assertRelative(t, "Xi", sn.Xi, 1, tol)
+		assertRelative(t, "Omega", sn.Omega, 2, tol)
+		assertRelative(t, "Alpha", sn.Alpha, 3, 0.15)
+	})
+
 	t.Run("InverseGaussian", func(t *testing.T) {
 		data := sampleInverseGaussian(rng, 3, 1.5, sampleSize)
 		dist, err := InverseGaussianFitter{}.Fit(data)
@@ -442,6 +466,7 @@ func TestPDFIntegratesToCDFDifference(t *testing.T) {
 		a, b float64
 	}{
 		{"Normal", Normal{Mu: 0, Sigma: 1}, -2, 1.5},
+		{"SkewNormal", SkewNormal{Xi: 0.5, Omega: 1.2, Alpha: 3}, -4, 6},
 		{"Exponential", Exponential{Lambda: 0.7}, 0.1, 4},
 		{"Laplace", Laplace{Mu: 0.5, Scale: 1.2}, -4, 6},
 		{"Logistic", Logistic{Mu: 0.5, Scale: 1.2}, -4, 6},
@@ -487,6 +512,7 @@ func TestPDFIntegratesToCDFDifference(t *testing.T) {
 func TestLogPDFMatchesLogOfPDF(t *testing.T) {
 	dists := []ContinuousDistribution{
 		Normal{Mu: 1, Sigma: 2},
+		SkewNormal{Xi: 0.5, Omega: 1.2, Alpha: 3},
 		Exponential{Lambda: 1.3},
 		Laplace{Mu: 0.5, Scale: 1.2},
 		Logistic{Mu: 0.5, Scale: 1.2},

@@ -55,7 +55,7 @@ Im Hilfetext (`distfit -h`) stehen dieselben Flags mit Kurzbeschreibung.
 
 ## Verteilungen
 
-`distfit list distributions` zeigt alle 17 Kandidaten mit Parametern, Träger und Hinweisen:
+`distfit list distributions` zeigt alle 18 Kandidaten mit Parametern, Träger und Hinweisen:
 
 ```text
 $ distfit list distributions
@@ -65,6 +65,7 @@ LogNormal    mu, sigma              (0, ∞)                      Logarithmische
 Gamma        alpha, scale           [0, ∞)                      Gammaverteilung für positive, rechtsschiefe Daten
 LogLogistic  scale, shape           (0, ∞)                      Log-Logistische Verteilung für positive Daten mit schwerem rechten Rand
 Normal       mu, sigma              ℝ                           Normalverteilung, symmetrisch um mu
+SkewNormal   xi, omega, alpha       ℝ                           Schiefe Normalverteilung (Azzalini); alpha = 0 ergibt die Normalverteilung
 Beta         alpha, beta, min, max  [min, max] (aus den Daten)  Beta-Verteilung auf einem endlichen Intervall
 Exponential  rate                   [0, ∞)                      Exponentialverteilung, gedächtnislos, ein Parameter
 Gumbel       mu, beta               ℝ                           Gumbel-Verteilung für Maxima, rechtsschief
@@ -72,7 +73,7 @@ Gumbel       mu, beta               ℝ                           Gumbel-Verteil
 ```
 
 Die vollständige Liste der Namen (Standardreihenfolge):
-`Weibull`, `LogNormal`, `Gamma`, `Normal`, `Beta`, `Exponential`, `Gumbel`, `Rayleigh`, `Laplace`, `Logistic`, `LogLogistic`, `BurrXII`, `Pareto`, `ChiSquare`, `Cauchy`, `StudentT`, `InverseGaussian`.
+`Weibull`, `LogNormal`, `Gamma`, `Normal`, `SkewNormal`, `Beta`, `Exponential`, `Gumbel`, `Rayleigh`, `Laplace`, `Logistic`, `LogLogistic`, `BurrXII`, `Pareto`, `ChiSquare`, `Cauchy`, `StudentT`, `InverseGaussian`.
 
 Mit `-format=json` liefert der Befehl ein Array; die Felder sind `name`, `description`, `params`, `support`, `fit_notes` und `zero_inflatable`:
 
@@ -98,7 +99,7 @@ Die Namen sind in allen Flags case-insensitive: `weibull`, `Weibull` und `WEIBUL
 
 ## Modellauswahl
 
-Ohne Auswahlflag werden alle 17 Kandidaten verwendet. Mit den folgenden Flags lässt sich die Menge einschränken:
+Ohne Auswahlflag werden alle 18 Kandidaten verwendet. Mit den folgenden Flags lässt sich die Menge einschränken:
 
 | Kombination | Verhalten |
 |-------------|-----------|

@@ -127,6 +127,11 @@ func TestNumericalStabilityVeryLargeValues(t *testing.T) {
 			data:   []float64{1e8, 2e8, 3e8, 4e8, 5e8, 1e9, 2e9, 5e9},
 		},
 		{
+			name:   "SkewNormal with very large values",
+			fitter: SkewNormalFitter{},
+			data:   []float64{1e8, 2e8, 3e8, 4e8, 5e8, 1e9, 2e9, 5e9},
+		},
+		{
 			name:   "Gumbel with very large values",
 			fitter: GumbelFitter{},
 			data:   []float64{1e8, 2e8, 3e8, 4e8, 5e8, 1e9, 2e9, 5e9},
@@ -257,6 +262,22 @@ func TestNumericalStabilityParametersNearBoundaries(t *testing.T) {
 			dist: Normal{Mu: 0, Sigma: 1e10},
 		},
 		{
+			name: "SkewNormal with very small omega",
+			dist: SkewNormal{Xi: 0, Omega: 1e-10, Alpha: 2},
+		},
+		{
+			name: "SkewNormal with very large omega",
+			dist: SkewNormal{Xi: 0, Omega: 1e10, Alpha: 2},
+		},
+		{
+			name: "SkewNormal with very large alpha",
+			dist: SkewNormal{Xi: 0, Omega: 1, Alpha: 1e6},
+		},
+		{
+			name: "SkewNormal with very small alpha",
+			dist: SkewNormal{Xi: 0, Omega: 1, Alpha: -1e6},
+		},
+		{
 			name: "Gamma with very small alpha",
 			dist: Gamma{Alpha: 1e-6, Beta: 1},
 		},
@@ -334,6 +355,16 @@ func TestNumericalStabilityOverflowUnderflow(t *testing.T) {
 			x:    100,
 		},
 		{
+			name: "SkewNormal PDF far in the tail",
+			dist: SkewNormal{Xi: 0, Omega: 1, Alpha: 3},
+			x:    100,
+		},
+		{
+			name: "SkewNormal PDF deep in the opposite tail",
+			dist: SkewNormal{Xi: 0, Omega: 1, Alpha: 3},
+			x:    -100,
+		},
+		{
 			name: "Exponential PDF with large x",
 			dist: Exponential{Lambda: 10},
 			x:    100,
@@ -395,6 +426,7 @@ func TestNumericalStabilityZeroValues(t *testing.T) {
 		{"Gamma", GammaFitter{}},
 		{"LogNormal", LogNormalFitter{}},
 		{"LogLogistic", LogLogisticFitter{}},
+		{"SkewNormal", SkewNormalFitter{}},
 		{"Weibull", WeibullFitter{}},
 	}
 
@@ -440,6 +472,7 @@ func TestNumericalStabilityNearZeroParameters(t *testing.T) {
 		{"Gamma", GammaFitter{}},
 		{"LogNormal", LogNormalFitter{}},
 		{"LogLogistic", LogLogisticFitter{}},
+		{"SkewNormal", SkewNormalFitter{}},
 		{"Weibull", WeibullFitter{}},
 	}
 

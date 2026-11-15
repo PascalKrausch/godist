@@ -42,6 +42,7 @@ from scipy.stats import (
     t as student_t,
     cauchy,
     rayleigh,
+    skewnorm,
     weibull_min,
 )
 
@@ -53,7 +54,7 @@ SIZES = [100, 10_000, 1_000_000]
 SEED = 42
 GOLDEN_GAMMA = 0x9E3779B97F4A7C15
 NAMES = [
-    "Beta", "Exponential", "Normal", "Gumbel", "Gamma",
+    "Beta", "Exponential", "Normal", "SkewNormal", "Gumbel", "Gamma",
     "LogNormal", "LogLogistic", "Weibull", "Laplace", "Logistic", "Rayleigh", "Pareto", "ChiSquare", "Cauchy", "StudentT",
     "BurrXII", "InverseGaussian",
 ]
@@ -87,6 +88,7 @@ FIT_CALLS = {
     "Beta": _beta_fit,
     "Exponential": lambda d: expon.fit(d, floc=0),
     "Normal": lambda d: norm.fit(d),
+    "SkewNormal": lambda d: skewnorm.fit(d),
     "Gumbel": lambda d: gumbel_r.fit(d),
     "Gamma": lambda d: gamma.fit(d, floc=0),
     "LogNormal": lambda d: lognorm.fit(d, floc=0),

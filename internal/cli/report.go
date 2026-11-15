@@ -332,6 +332,8 @@ func getDistributionName(dist distribution.ContinuousDistribution) string {
 		return "Gamma"
 	case distribution.Normal:
 		return "Normal"
+	case distribution.SkewNormal:
+		return "SkewNormal"
 	case distribution.Beta:
 		return "Beta"
 	case distribution.Exponential:
