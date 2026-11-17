@@ -1,6 +1,9 @@
 package distribution
 
-import "errors"
+import (
+	"errors"
+	"time"
+)
 
 // ContinuousDistribution beschreibt eine kontinuierliche Wahrscheinlichkeitsverteilung.
 type ContinuousDistribution interface {
@@ -37,6 +40,8 @@ type FitMetrics struct {
 	KSStatistic   float64
 	RMSE          float64
 	Converged     bool // true wenn die Optimierung konvergiert ist
+	// Duration ist die Walltime des Fits inklusive Metrikberechnung; 0, wenn nicht gemessen.
+	Duration time.Duration
 }
 
 type FitFailure struct {

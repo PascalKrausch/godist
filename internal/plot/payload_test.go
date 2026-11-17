@@ -151,6 +151,9 @@ func TestBuildPayloadExposesParamsAndMetricsWithNullForInvalid(t *testing.T) {
 	if m.Metrics.RMSE != nil {
 		t.Errorf("RMSE = %v, want null for Inf", *m.Metrics.RMSE)
 	}
+	if m.Metrics.DurationMs != nil {
+		t.Errorf("DurationMs = %v, want null when not measured", *m.Metrics.DurationMs)
+	}
 	if _, err := json.Marshal(payload); err != nil {
 		t.Errorf("payload does not marshal to JSON: %v", err)
 	}

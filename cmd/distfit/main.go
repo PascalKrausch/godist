@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/PascalKrausch/godist/internal/cli"
 	"github.com/PascalKrausch/godist/internal/plotserver"
@@ -242,17 +243,20 @@ func validateFlags(filePath, column, format, decimal string, allModels bool) err
 
 // runAll vergleicht alle Verteilungen und gibt den Bericht aus.
 func runAll(stdout, stderr io.Writer, ds cli.Dataset, filePath, format string, fitters []distribution.Fitter) int {
+	start := time.Now()
 	results, failures, err := distribution.SelectAllModelsFromFitters(ds.Values, fitters)
 	if err != nil {
 		fmt.Fprintf(stderr, "Fehler: Fitting fehlgeschlagen: %v\n", err)
 		return exitFailure
 	}
+	totalDuration := time.Since(start)
 
 	if format == "plot" {
-		return runPlot(stderr, ds.Values, results)
+		return runPlot(stderr, ds.Values, results, totalDuration)
 	}
 
 	report := cli.BuildFitReport(results, failures, filePath, ds.Column, stats.Describe(ds.Values), len(ds.Discarded))
+	report.TotalDurationMs = float64(totalDuration) / float64(time.Millisecond)
 
 	if format == "json" {
 		if err := cli.WriteJSONReport(stdout, report); err != nil {
@@ -272,7 +276,7 @@ func runAll(stdout, stderr io.Writer, ds cli.Dataset, filePath, format string, f
 }
 
 // runPlot startet das interaktive Dashboard, öffnet den Browser und blockiert bis Strg+C.
-func runPlot(stderr io.Writer, values []float64, results []distribution.FitResult) int {
+func runPlot(stderr io.Writer, values []float64, results []distribution.FitResult, fitDuration time.Duration) int {
 	if len(results) == 0 {
 		fmt.Fprintln(stderr, "Fehler: Kein Modell konnte angepasst werden.")
 		return exitFailure
@@ -283,7 +287,7 @@ func runPlot(stderr io.Writer, values []float64, results []distribution.FitResul
 	defer stop()
 
 	err := plotserver.Serve(ctx, source, func(url string) {
-		fmt.Fprintf(stderr, "Dashboard: %s\nBeenden mit Strg+C.\n", url)
+		fmt.Fprintf(stderr, "Dashboard: %s\nFit-Zeit gesamt: %s\nBeenden mit Strg+C.\n", url, fitDuration.Round(time.Millisecond))
 		if err := cli.OpenBrowser(url); err != nil {
 			fmt.Fprintf(stderr, "Warnung: Browser konnte nicht geöffnet werden: %v\n", err)
 		}

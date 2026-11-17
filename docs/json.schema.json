@@ -41,6 +41,11 @@
       "type": "string",
       "description": "Name des Modells mit dem kleinsten AIC. Nur vorhanden, wenn mindestens ein Modell angepasst wurde."
     },
+    "total_duration_ms": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Walltime aller Fits zusammen in Millisekunden (parallel). Optional."
+    },
     "descriptive": {
       "type": "object",
       "required": ["n", "mean", "median", "variance", "std_dev", "min", "q1", "q3", "max", "skewness", "kurtosis"],
@@ -92,7 +97,8 @@
         "delta_aic": { "type": "number", "minimum": 0 },
         "bic": { "type": "number" },
         "ks_statistic": { "type": "number", "minimum": 0 },
-        "rmse": { "type": "number", "minimum": 0 }
+        "rmse": { "type": "number", "minimum": 0 },
+        "duration_ms": { "type": "number", "minimum": 0, "description": "Walltime des Fits in Millisekunden. Optional." }
       }
     }
   }

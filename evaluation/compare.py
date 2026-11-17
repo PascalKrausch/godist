@@ -184,7 +184,11 @@ def fit_gengamma_mle(data):
 
     def nll(theta):
         la, c, ls = theta
-        ll = np.sum(gengamma.logpdf(data, np.exp(la), c, loc=0, scale=np.exp(ls)))
+        with np.errstate(over="ignore", invalid="ignore", divide="ignore"):
+            try:
+                ll = np.sum(gengamma.logpdf(data, np.exp(la), c, loc=0, scale=np.exp(ls)))
+            except (ValueError, FloatingPointError):
+                return np.inf
         return -ll if np.isfinite(ll) else np.inf
 
     best = None

@@ -148,14 +148,14 @@ func TestBurrXIIProfileGradientMatchesFiniteDifference(t *testing.T) {
 	}
 
 	const gamma, b, h = 0.2, -0.3, 1e-6
-	_, dG, dB, ok := profile.evaluate(gamma, b)
+	_, dG, dB, _, ok := profile.evaluate(gamma, b)
 	if !ok {
 		t.Fatal("evaluate() not ok at test point")
 	}
-	llPlusG, _, _, _ := profile.evaluate(gamma+h, b)
-	llMinusG, _, _, _ := profile.evaluate(gamma-h, b)
-	llPlusB, _, _, _ := profile.evaluate(gamma, b+h)
-	llMinusB, _, _, _ := profile.evaluate(gamma, b-h)
+	llPlusG, _, _, _, _ := profile.evaluate(gamma+h, b)
+	llMinusG, _, _, _, _ := profile.evaluate(gamma-h, b)
+	llPlusB, _, _, _, _ := profile.evaluate(gamma, b+h)
+	llMinusB, _, _, _, _ := profile.evaluate(gamma, b-h)
 	if fdG := (llPlusG - llMinusG) / (2 * h); relErr(dG, fdG) > 1e-6 {
 		t.Errorf("d/dgamma = %v, finite difference %v", dG, fdG)
 	}

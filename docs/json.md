@@ -30,6 +30,7 @@ Der verbindliche Vertrag ist [`json.schema.json`](json.schema.json) (JSON Schema
   "discarded": 5,
   "candidates": 9,
   "best_distribution": "Weibull",
+  "total_duration_ms": 42.7,
   "descriptive": {
     "n": 1000,
     "mean": 1.02,
@@ -51,7 +52,8 @@ Der verbindliche Vertrag ist [`json.schema.json`](json.schema.json) (JSON Schema
       "delta_aic": 0.0,
       "bic": 1240.2,
       "ks_statistic": 0.0234,
-      "rmse": 0.0156
+      "rmse": 0.0156,
+      "duration_ms": 12.3
     }
   ],
   "failures": []
@@ -75,6 +77,7 @@ type FitRow struct {
     BIC         float64            `json:"bic"`
     KSStatistic float64            `json:"ks_statistic"`
     RMSE        float64            `json:"rmse"`
+    DurationMs  float64            `json:"duration_ms,omitempty"`
 }
 
 type Failure struct {
@@ -105,6 +108,7 @@ type FitReport struct {
     Discarded        int         `json:"discarded"`
     Candidates       int         `json:"candidates"`
     BestDistribution string      `json:"best_distribution,omitempty"`
+    TotalDurationMs  float64     `json:"total_duration_ms,omitempty"`
     Descriptive      Descriptive `json:"descriptive"`
     Models           []FitRow    `json:"models"`
     Failures         []Failure   `json:"failures"`
@@ -171,6 +175,7 @@ interface FitRow {
   bic: number;
   ks_statistic: number;
   rmse: number;
+  duration_ms?: number;
 }
 
 interface Failure {
@@ -201,6 +206,7 @@ interface FitReport {
   discarded: number;
   candidates: number;
   best_distribution?: string;
+  total_duration_ms?: number;
   descriptive: Descriptive;
   models: FitRow[];
   failures: Failure[];

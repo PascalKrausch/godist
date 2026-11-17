@@ -23,6 +23,8 @@ type FitRow struct {
 	BIC         float64            `json:"bic"`
 	KSStatistic float64            `json:"ks_statistic"`
 	RMSE        float64            `json:"rmse"`
+	// DurationMs ist die Walltime des Fits in Millisekunden; 0, wenn nicht gemessen.
+	DurationMs float64 `json:"duration_ms,omitempty"`
 }
 
 // JSONSchemaVersion ist die Version des JSON-Vertrags (docs/json.schema.json).
@@ -41,6 +43,8 @@ type FitReport struct {
 	Descriptive      stats.Summary             `json:"descriptive"`
 	Models           []FitRow                  `json:"models"`
 	Failures         []distribution.FitFailure `json:"failures"`
+	// TotalDurationMs ist die Walltime aller Fits zusammen in Millisekunden; 0, wenn nicht gemessen.
+	TotalDurationMs float64 `json:"total_duration_ms,omitempty"`
 }
 
 // Öffentliche Berichtsfunktionen
@@ -71,6 +75,7 @@ func BuildFitReport(results []distribution.FitResult, failures []distribution.Fi
 			BIC:         result.Metrics.BIC,
 			KSStatistic: result.Metrics.KSStatistic,
 			RMSE:        result.Metrics.RMSE,
+			DurationMs:  result.Metrics.Duration.Seconds() * 1000,
 		})
 	}
 
@@ -113,6 +118,9 @@ func WriteTextReport(w io.Writer, report FitReport) error {
 		failed,
 	)
 	fmt.Fprintln(w, "Criterion:    AIC (lower is better)")
+	if report.TotalDurationMs > 0 {
+		fmt.Fprintf(w, "Runtime:      %s total (parallel)\n", formatRuntime(report.TotalDurationMs))
+	}
 	fmt.Fprintln(w)
 
 	writeDescriptive(w, report.Descriptive)
@@ -124,6 +132,9 @@ func WriteTextReport(w io.Writer, report FitReport) error {
 	fmt.Fprintf(w, "Distribution: %s\n", best.Name)
 	fmt.Fprintf(w, "Parameters:   %s\n", formatParams(best.Params))
 	fmt.Fprintf(w, "AIC / BIC:    %.2f / %.2f\n", best.AIC, best.BIC)
+	if best.DurationMs > 0 {
+		fmt.Fprintf(w, "Runtime:      %s\n", formatRuntime(best.DurationMs))
+	}
 	fmt.Fprintln(w)
 
 	tableRows := make([][]string, 0, len(report.Models))
@@ -138,6 +149,7 @@ func WriteTextReport(w io.Writer, report FitReport) error {
 			fmt.Sprintf("%.2f", model.BIC),
 			fmt.Sprintf("%.4f", model.KSStatistic),
 			fmt.Sprintf("%.4f", model.RMSE),
+			formatRuntime(model.DurationMs),
 		})
 	}
 
@@ -152,6 +164,7 @@ func WriteTextReport(w io.Writer, report FitReport) error {
 		"BIC",
 		"KS",
 		"RMSE",
+		"Runtime",
 	}, tableRows)
 
 	if len(report.Failures) > 0 {
@@ -186,6 +199,9 @@ func WriteSummary(w io.Writer, dist distribution.ContinuousDistribution, metrics
 	fmt.Fprintf(w, "Parameter:      %s\n", formatParams(paramsToMap(dist)))
 	fmt.Fprintf(w, "AIC / BIC:      %.2f / %.2f\n", metrics.AIC, metrics.BIC)
 	fmt.Fprintf(w, "KS-Statistik:   %.4f (RMSE: %.4f)\n", metrics.KSStatistic, metrics.RMSE)
+	if metrics.Duration > 0 {
+		fmt.Fprintf(w, "Runtime:        %s\n", formatRuntime(metrics.Duration.Seconds()*1000))
+	}
 	if getDistributionName(dist) == "GEV" {
 		fmt.Fprintln(w, extremeValueNote)
 	}
@@ -206,6 +222,14 @@ func writeDescriptive(w io.Writer, s stats.Summary) {
 	fmt.Fprintf(w, "Skewness:     %s\n", formatStat(s.Skewness))
 	fmt.Fprintf(w, "Kurtosis:     %s (excess)\n", formatStat(s.Kurtosis))
 	fmt.Fprintln(w)
+}
+
+// formatRuntime formatiert eine Laufzeit in Millisekunden; ab einer Sekunde wird in Sekunden ausgegeben.
+func formatRuntime(ms float64) string {
+	if ms >= 1000 {
+		return fmt.Sprintf("%.2f s", ms/1000)
+	}
+	return fmt.Sprintf("%.1f ms", ms)
 }
 
 // formatStat formatiert eine Kennzahl mit vier Nachkommastellen; NaN erscheint als Gedankenstrich.

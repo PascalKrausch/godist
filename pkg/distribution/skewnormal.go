@@ -137,8 +137,10 @@ func owenTIntegrand(h float64) func(float64) float64 {
 
 // simpsonAdaptive ist eine adaptive Simpson-Quadratur mit absoluter Toleranz
 // auf dem Integralwert; maxDepth begrenzt die Rekursion für sehr große Intervalle.
+// tol = 1e-12 reicht für die CDF-Genauigkeit (KS/RMSE); 1e-13 verdoppelte
+// praktisch die Funktionsauswertungen pro T(h, a).
 func simpsonAdaptive(f func(float64) float64, a, b float64) float64 {
-	const tol = 1e-13
+	const tol = 1e-12
 	const maxDepth = 200
 	m := 0.5 * (a + b)
 	fa, fm, fb := f(a), f(m), f(b)
@@ -187,16 +189,42 @@ func skewNormalLogLikGrad(data []float64, xi, omega, alpha float64) (ll, gXi, gT
 	for _, x := range data {
 		z := (x - xi) / omega
 		t := alpha * z
-		lam := millsRatio(t)
+		// logΦ(t) wird einmal gebraucht: für den ll-Term und für die Mills-Ratio
+		// λ(t) = φ(t)/Φ(t) = exp(−t²/2 − ½ln(2π) − logΦ(t)).
+		logPhiT := logPhi(t)
+		lam := math.Exp(-0.5*t*t - 0.5*math.Log(2*math.Pi) - logPhiT)
 		if math.IsNaN(lam) || math.IsInf(lam, 0) {
 			return 0, 0, 0, 0, false
 		}
-		ll += constPerObs - 0.5*z*z + logPhi(t)
+		ll += constPerObs - 0.5*z*z + logPhiT
 		gXi += (z - alpha*lam) / omega
 		gTheta += z*z - z*alpha*lam - 1
 		gAlpha += z * lam
 	}
 	return ll, gXi, gTheta, gAlpha, IsFinite(ll) && IsFinite(gXi) && IsFinite(gTheta) && IsFinite(gAlpha)
+}
+
+// skewNormalProfile cached das letzte Ergebnis von skewNormalLogLikGrad: Func und
+// Grad fragen im L-BFGS am selben Punkt (ξ, log ω, α) ab, sodass der O(n)-Pass pro
+// Optimierungsschritt nur einmal läuft. Einträge sind bitgenau gekennzeichnet;
+// abweichende Punkte sind schlicht Cache-Misses.
+type skewNormalProfile struct {
+	data []float64
+
+	cacheXi, cacheTheta, cacheAlpha       float64
+	cacheLL, cacheGXi, cacheGTheta, cacheGAlpha float64
+	cacheOK, cacheValid                    bool
+}
+
+func (p *skewNormalProfile) eval(xi, theta, alpha float64) (ll, gXi, gTheta, gAlpha float64, ok bool) {
+	if p.cacheValid && p.cacheXi == xi && p.cacheTheta == theta && p.cacheAlpha == alpha {
+		return p.cacheLL, p.cacheGXi, p.cacheGTheta, p.cacheGAlpha, p.cacheOK
+	}
+	ll, gXi, gTheta, gAlpha, ok = skewNormalLogLikGrad(p.data, xi, math.Exp(theta), alpha)
+	p.cacheXi, p.cacheTheta, p.cacheAlpha = xi, theta, alpha
+	p.cacheLL, p.cacheGXi, p.cacheGTheta, p.cacheGAlpha, p.cacheOK, p.cacheValid =
+		ll, gXi, gTheta, gAlpha, ok, true
+	return ll, gXi, gTheta, gAlpha, ok
 }
 
 func (f SkewNormalFitter) Fit(data []float64) (ContinuousDistribution, error) {
@@ -250,16 +278,20 @@ func (f SkewNormalFitter) Fit(data []float64) (ContinuousDistribution, error) {
 	}
 
 	norm := 1 / n
+	profile := &skewNormalProfile{data: cleaned}
 	problem := optimize.Problem{
 		Func: func(v []float64) float64 {
-			ll, _, _, _, ok := skewNormalLogLikGrad(cleaned, v[0], math.Exp(v[1]), v[2])
-			if !ok || math.Abs(v[2]) > skewNormalAlphaBound {
+			if math.Abs(v[2]) > skewNormalAlphaBound {
+				return math.Inf(1)
+			}
+			ll, _, _, _, ok := profile.eval(v[0], v[1], v[2])
+			if !ok {
 				return math.Inf(1)
 			}
 			return -ll * norm
 		},
 		Grad: func(grad, v []float64) {
-			_, gXi, gTheta, gAlpha, ok := skewNormalLogLikGrad(cleaned, v[0], math.Exp(v[1]), v[2])
+			_, gXi, gTheta, gAlpha, ok := profile.eval(v[0], v[1], v[2])
 			if !ok {
 				grad[0], grad[1], grad[2] = math.Inf(1), math.Inf(1), math.Inf(1)
 				return
@@ -271,7 +303,7 @@ func (f SkewNormalFitter) Fit(data []float64) (ContinuousDistribution, error) {
 	}
 
 	settings := &optimize.Settings{
-		GradientThreshold: 1e-12,
+		GradientThreshold: 1e-10,
 		MajorIterations:   skewNormalMaxIter,
 		FuncEvaluations:   20000,
 		GradEvaluations:   20000,

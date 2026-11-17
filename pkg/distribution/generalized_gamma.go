@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"runtime"
+	"sync"
 
 	"gonum.org/v1/gonum/mathext"
 	"gonum.org/v1/gonum/optimize"
@@ -141,11 +143,20 @@ func (f GeneralizedGammaFitter) Fit(data []float64) (ContinuousDistribution, err
 	}
 	meanLog /= float64(len(logs))
 
-	profile := ggProfile{z: make([]float64, len(logs)), n: float64(len(logs)), meanLog: meanLog}
+	// z wird zentriert um meanLog berechnet und in-place in logs gespeichert;
+	// min/max werden für die O(1)-Maximumsbestimmung in eval mitgeführt.
+	zMin, zMax := math.Inf(1), math.Inf(-1)
 	varies := false
 	for i, l := range logs {
-		profile.z[i] = l - meanLog
-		if profile.z[i] != 0 {
+		z := l - meanLog
+		logs[i] = z
+		if z < zMin {
+			zMin = z
+		}
+		if z > zMax {
+			zMax = z
+		}
+		if z != 0 {
 			varies = true
 		}
 	}
@@ -153,9 +164,15 @@ func (f GeneralizedGammaFitter) Fit(data []float64) (ContinuousDistribution, err
 		return nil, fmt.Errorf("GeneralizedGamma benötigt variierende Beobachtungen: %w", ErrFitFailed)
 	}
 
+	profile := ggProfile{z: logs, n: float64(len(logs)), meanLog: meanLog, zMin: zMin, zMax: zMax}
+
 	// Startwerte: Gamma (d = 1) und Weibull (p = 1) sind Spezialfälle der GG.
 	// Für d < 0 gibt es keinen geschachtelten Kandidaten; der Gamma-Start wird
-	// mit d = −1 verwendet.
+	// mit d = −1 verwendet. Die Startfits werden direkt aus den bereits
+	// berechneten logs abgeleitet, statt die Fitter erneut über die Daten laufen
+	// zu lassen: Gamma braucht nur Σx und meanLog (Thom-Approximation), und
+	// solveWeibullShape ist gegen Verschiebungen der logs invariant, sodass die
+	// zentrierten z genügen.
 	var best GeneralizedGamma
 	bestPhi := math.Inf(-1)
 	fitted := false
@@ -174,17 +191,24 @@ func (f GeneralizedGammaFitter) Fit(data []float64) (ContinuousDistribution, err
 		best, bestPhi, fitted = dist, phi, true
 	}
 
-	if g, err := (GammaFitter{}).Fit(cleaned); err == nil {
-		if gd, ok := g.(Gamma); ok {
-			alpha0 := math.Log(gd.Alpha)
+	// Gamma-Start: Thom-Indikator s = ln(mean) − meanLog mit Newton-Verfeinerung,
+	// äquivalent zu GammaFitter.Fit, aber ohne erneute Daten- und Log-Pässe.
+	var sum float64
+	for _, x := range cleaned {
+		sum += x
+	}
+	if s := math.Log(sum/profile.n) - meanLog; s > 0 && IsFinite(s) {
+		alpha := (1.0 + math.Sqrt(1.0+4.0*s/3.0)) / (4.0 * s)
+		alpha = refineGammaAlpha(alpha, s)
+		beta := sum / profile.n / alpha
+		if alpha > 0 && IsFinite(alpha) && beta > 0 && IsFinite(beta) {
+			alpha0 := math.Log(alpha)
 			tryStart(1, alpha0, 0)
 			tryStart(-1, alpha0, 0)
 		}
 	}
-	if w, err := (WeibullFitter{}).Fit(cleaned); err == nil {
-		if wd, ok := w.(Weibull); ok {
-			tryStart(1, 0, math.Log(wd.Shape))
-		}
+	if shape, ok := solveWeibullShape(profile.z); ok && shape > 0 && IsFinite(shape) {
+		tryStart(1, 0, math.Log(shape))
 	}
 	if !fitted {
 		tryStart(1, 0, 0)
@@ -207,29 +231,41 @@ type ggProfile struct {
 	z       []float64
 	n       float64
 	meanLog float64
+	zMin    float64
+	zMax    float64
+
+	// Cache des letzten eval-Aufrufs: der Optimierer fragt Func und Grad
+	// üblicherweise am selben Punkt (α, γ) an, die O(n)-Summen müssen dann
+	// nicht doppelt berechnet werden.
+	cSign, cAlpha, cGamma      float64
+	cPhi, cDAlpha, cDGamma, cL float64
+	cOK, cHit                  bool
 }
 
 // eval liefert die profillierte Log-Likelihood φ = ℓ/n, deren Gradienten
 // bezüglich (α, γ) und L = ln(S₀/(n·p)) für die Skalenrückrechnung.
 // ok ist false, wenn die Summen nicht endlich sind.
 func (p *ggProfile) eval(sign, alpha, gamma float64) (phi, dAlpha, dGamma, L float64, ok bool) {
+	if p.cHit && p.cSign == sign && p.cAlpha == alpha && p.cGamma == gamma {
+		return p.cPhi, p.cDAlpha, p.cDGamma, p.cL, p.cOK
+	}
+	defer func() {
+		p.cSign, p.cAlpha, p.cGamma = sign, alpha, gamma
+		p.cPhi, p.cDAlpha, p.cDGamma, p.cL = phi, dAlpha, dGamma, L
+		p.cOK, p.cHit = ok, true
+	}()
+
 	d := sign * math.Exp(gamma)
 	shape := math.Exp(alpha)
 
 	// S₀ = Σ e^(d·z_i) und S₁/S₀ = Σ z_i e^(d·z_i) / Σ e^(d·z_i), verschoben
-	// berechnet, damit große |d·z_i| nicht überlaufen.
-	maxDz := math.Inf(-1)
-	for _, zi := range p.z {
-		if v := d * zi; v > maxDz {
-			maxDz = v
-		}
+	// berechnet, damit große |d·z_i| nicht überlaufen. Das Maximum von d·z_i
+	// liegt in zMin bzw. zMax, weil d·z_i in z_i monoton ist.
+	maxDz := d * p.zMax
+	if d < 0 {
+		maxDz = d * p.zMin
 	}
-	var sw, sz float64
-	for _, zi := range p.z {
-		e := math.Exp(d*zi - maxDz)
-		sw += e
-		sz += zi * e
-	}
+	sw, sz := p.sums(d, maxDz)
 	if math.IsNaN(sw) || math.IsNaN(sz) || sw <= 0 || math.IsInf(sw, 0) || math.IsInf(sz, 0) {
 		return 0, 0, 0, 0, false
 	}
@@ -244,6 +280,60 @@ func (p *ggProfile) eval(sign, alpha, gamma float64) (phi, dAlpha, dGamma, L flo
 	dAlpha = -shape * (digamma + L)
 	dGamma = 1 - d*shape*(sz/sw)
 	return phi, dAlpha, dGamma, L, true
+}
+
+// ggParallelMin ist die Mindestgröße von z, ab der sums die Exponentialsumme
+// auf mehrere Goroutinen verteilt. Darunter überwiegt der Synchronisations-
+// overhead den Gewinn.
+const ggParallelMin = 1 << 13
+
+// ggMaxWorkers begrenzt die Parallelität innerhalb eines eval-Aufrufs.
+const ggMaxWorkers = 8
+
+// sums berechnet S₀ = Σ e^(d·z_i − maxDz) und S₁ = Σ z_i·e^(d·z_i − maxDz).
+// Die Aufteilung in zusammenhängende Blöcke ist deterministisch; die
+// Summationsreihenfolge weicht daher leicht von der sequenziellen Variante ab.
+func (p *ggProfile) sums(d, maxDz float64) (sw, sz float64) {
+	z := p.z
+	n := len(z)
+	if n < ggParallelMin {
+		for _, zi := range z {
+			e := math.Exp(d*zi - maxDz)
+			sw += e
+			sz += zi * e
+		}
+		return sw, sz
+	}
+
+	workers := runtime.GOMAXPROCS(0)
+	if workers > ggMaxWorkers {
+		workers = ggMaxWorkers
+	}
+	chunk := (n + workers - 1) / workers
+	nw := (n + chunk - 1) / chunk
+
+	var parts [ggMaxWorkers]struct{ sw, sz float64 }
+	var wg sync.WaitGroup
+	for w := 0; w < nw; w++ {
+		lo, hi := w*chunk, min((w+1)*chunk, n)
+		wg.Add(1)
+		go func(w, lo, hi int) {
+			defer wg.Done()
+			var sww, szz float64
+			for _, zi := range z[lo:hi] {
+				e := math.Exp(d*zi - maxDz)
+				sww += e
+				szz += zi * e
+			}
+			parts[w].sw, parts[w].sz = sww, szz
+		}(w, lo, hi)
+	}
+	wg.Wait()
+	for i := 0; i < nw; i++ {
+		sw += parts[i].sw
+		sz += parts[i].sz
+	}
+	return sw, sz
 }
 
 // optimize führt einen L-BFGS-Lauf für das vorgegebene Vorzeichen von d aus

@@ -204,22 +204,27 @@ func (f StudentTFitter) Fit(data []float64) (ContinuousDistribution, error) {
 // der quadrierten Abweichungen.
 func studentTEM(data []float64, mu, s, nu float64) (StudentT, bool) {
 	n := float64(len(data))
+	// w puffert die EM-Gewichte des Updates: die zweite Teilschleife verwendet
+	// dieselben Gewichte (altes μ, altes s²) wie die erste und braucht sie nur
+	// mit neuem μ — NeuBerechnen würde pro Iteration einen zusätzlichen O(n)-Pass
+	// mit Division pro Beobachtung kosten.
+	w := make([]float64, len(data))
 	for iter := 0; iter < studentTEMMax; iter++ {
 		s2 := s * s
 		sumW, sumWX := 0.0, 0.0
-		for _, x := range data {
+		for i, x := range data {
 			d := x - mu
-			w := (nu + 1) / (nu + d*d/s2)
-			sumW += w
-			sumWX += w * x
+			wi := (nu + 1) / (nu + d*d/s2)
+			w[i] = wi
+			sumW += wi
+			sumWX += wi * x
 		}
 		muNew := sumWX / sumW
 
 		sumWD := 0.0
-		for _, x := range data {
+		for i, x := range data {
 			d := x - muNew
-			w := (nu + 1) / (nu + (x-mu)*(x-mu)/s2)
-			sumWD += w * d * d
+			sumWD += w[i] * d * d
 		}
 		sNew := math.Sqrt(sumWD / n)
 

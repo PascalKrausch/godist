@@ -35,10 +35,11 @@ type Param struct {
 
 // Metrics enthält die Gütemaße eines Modells. Ungültige Werte sind null.
 type Metrics struct {
-	AIC  *float64 `json:"aic"`
-	BIC  *float64 `json:"bic"`
-	KS   *float64 `json:"ks"`
-	RMSE *float64 `json:"rmse"`
+	AIC        *float64 `json:"aic"`
+	BIC        *float64 `json:"bic"`
+	KS         *float64 `json:"ks"`
+	RMSE       *float64 `json:"rmse"`
+	DurationMs *float64 `json:"duration_ms"`
 }
 
 // Series ist eine Folge von (x, y)-Punkten.
@@ -277,11 +278,17 @@ func modelParams(dist distribution.ContinuousDistribution) []Param {
 
 // newMetrics übernimmt die Gütemaße des Fits.
 func newMetrics(m distribution.FitMetrics) Metrics {
+	var durationMs *float64
+	if m.Duration > 0 {
+		ms := m.Duration.Seconds() * 1000
+		durationMs = &ms
+	}
 	return Metrics{
-		AIC:  finiteOrNil(m.AIC),
-		BIC:  finiteOrNil(m.BIC),
-		KS:   finiteOrNil(m.KSStatistic),
-		RMSE: finiteOrNil(m.RMSE),
+		AIC:        finiteOrNil(m.AIC),
+		BIC:        finiteOrNil(m.BIC),
+		KS:         finiteOrNil(m.KSStatistic),
+		RMSE:       finiteOrNil(m.RMSE),
+		DurationMs: durationMs,
 	}
 }
 

@@ -107,15 +107,25 @@ func (f BurrXIIFitter) Name() string {
 type burrProfile struct {
 	y    []float64
 	sumY float64
+
+	// Cache des letzten evaluate-Aufrufs: Func und Grad fragen am selben Punkt (gamma, b) ab,
+	// sodass der O(n)-Pass pro Optimierungsschritt nur einmal läuft.
+	cacheGamma, cacheB                   float64
+	cacheLL, cacheDG, cacheDB, cacheSumS float64
+	cacheOK, cacheValid                  bool
 }
 
-// evaluate liefert die Log-Likelihood (bis auf Konstanten) des profilierten Modells und dessen Gradienten
-// bezüglich (γ, b). ok ist false, wenn Σs_i nicht positiv und endlich ist.
-func (p burrProfile) evaluate(gamma, b float64) (ll, dGamma, dB float64, ok bool) {
+// evaluate liefert die Log-Likelihood (bis auf Konstanten) des profilierten Modells, dessen
+// Gradienten bezüglich (γ, b) und Σs_i. ok ist false, wenn Σs_i nicht positiv und endlich ist.
+func (p *burrProfile) evaluate(gamma, b float64) (ll, dGamma, dB, sumS float64, ok bool) {
+	if p.cacheValid && p.cacheGamma == gamma && p.cacheB == b {
+		return p.cacheLL, p.cacheDG, p.cacheDB, p.cacheSumS, p.cacheOK
+	}
 	c := math.Exp(gamma)
 	n := float64(len(p.y))
 
-	var sumS, sumSig, sumSigD float64
+	var sumSig, sumSigD float64
+	sumS = 0
 	for _, yi := range p.y {
 		d := yi - b
 		s, sig := softplusSigmoid(c * d)
@@ -124,14 +134,18 @@ func (p burrProfile) evaluate(gamma, b float64) (ll, dGamma, dB float64, ok bool
 		sumSigD += sig * d
 	}
 	if !(sumS > 0) || math.IsInf(sumS, 0) {
-		return 0, 0, 0, false
+		p.cacheGamma, p.cacheB, p.cacheLL, p.cacheDG, p.cacheDB, p.cacheSumS, p.cacheOK, p.cacheValid =
+			gamma, b, 0, 0, 0, 0, false, true
+		return 0, 0, 0, 0, false
 	}
 
 	kHat := n / sumS
 	ll = (c-1)*p.sumY + n*gamma - n*c*b - n*math.Log(sumS) - sumS
 	dB = c * ((kHat+1)*sumSig - n)
 	dGamma = c*p.sumY + n - n*c*b - c*(kHat+1)*sumSigD
-	return ll, dGamma, dB, true
+	p.cacheGamma, p.cacheB, p.cacheLL, p.cacheDG, p.cacheDB, p.cacheSumS, p.cacheOK, p.cacheValid =
+		gamma, b, ll, dGamma, dB, sumS, true, true
+	return ll, dGamma, dB, sumS, true
 }
 
 // Fit schätzt die Parameter per L-BFGS auf der profilierten Log-Likelihood mit analytischem Gradienten.
@@ -178,14 +192,14 @@ func (f BurrXIIFitter) Fit(data []float64) (ContinuousDistribution, error) {
 			if math.Abs(x[0]) > math.Log(burrMaxShape) {
 				return math.Inf(1)
 			}
-			v, _, _, ok := profile.evaluate(x[0], x[1])
+			v, _, _, _, ok := profile.evaluate(x[0], x[1])
 			if !ok {
 				return math.Inf(1)
 			}
 			return -v / n
 		},
 		Grad: func(grad, x []float64) {
-			_, dG, dB, ok := profile.evaluate(x[0], x[1])
+			_, dG, dB, _, ok := profile.evaluate(x[0], x[1])
 			if !ok {
 				grad[0] = math.Inf(1)
 				grad[1] = math.Inf(1)
@@ -213,13 +227,13 @@ func (f BurrXIIFitter) Fit(data []float64) (ContinuousDistribution, error) {
 	if math.Abs(gamma) > math.Log(burrMaxShape) {
 		return nil, fmt.Errorf("BurrXII-Formparameter an der Grenze: %w", ErrFitFailed)
 	}
-	_, dG, dB, ok := profile.evaluate(gamma, b)
+	_, dG, dB, sumS, ok := profile.evaluate(gamma, b)
 	if !ok || math.Max(math.Abs(dG), math.Abs(dB))/n > 1e-6 {
 		return nil, fmt.Errorf("BurrXII-MLE nicht konvergiert: %w", ErrFitFailed)
 	}
 
 	c := math.Exp(gamma)
-	k := n / sumSoftplus(profile.y, c, b)
+	k := n / sumS
 	if c > burrMaxShape || k > burrMaxShape {
 		return nil, fmt.Errorf("BurrXII-Formparameter gegen Grenzwert %g gelaufen (Grenzfall, MLE nicht eindeutig): %w", burrMaxShape, ErrFitFailed)
 	}
@@ -233,12 +247,3 @@ func (f BurrXIIFitter) Fit(data []float64) (ContinuousDistribution, error) {
 // burrMaxShape begrenzt c und k. Für größere Werte nähert sich die Verteilung einer Grenzform
 // (Weibull- bzw. Gamma-artig), und die Likelihood hat kein eindeutiges Maximum im Inneren.
 const burrMaxShape = 1e6
-
-// sumSoftplus berechnet Σ softplus(c·(y_i − b)).
-func sumSoftplus(y []float64, c, b float64) float64 {
-	var sum float64
-	for _, yi := range y {
-		sum += softplus(c * (yi - b))
-	}
-	return sum
-}

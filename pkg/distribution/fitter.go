@@ -4,6 +4,7 @@ import (
 	"errors"
 	"math"
 	"sync"
+	"time"
 )
 
 // EvaluateFit berechnet alle Gütemetriken für eine beliebige ContinuousDistribution.
@@ -191,6 +192,7 @@ type fitOutcome struct {
 
 // fitOne fittet eine Verteilung und bewertet sie mit EvaluateFit.
 func fitOne(fitter Fitter, data []float64) fitOutcome {
+	start := time.Now()
 	dist, err := fitter.Fit(data)
 	if err != nil {
 		return fitOutcome{failure: &FitFailure{Name: fitter.Name(), Error: err.Error()}}
@@ -200,6 +202,7 @@ func fitOne(fitter Fitter, data []float64) fitOutcome {
 	if err != nil {
 		return fitOutcome{failure: &FitFailure{Name: fitter.Name(), Error: err.Error()}}
 	}
+	metrics.Duration = time.Since(start)
 
 	return fitOutcome{result: FitResult{Name: fitter.Name(), Dist: dist, Metrics: metrics}}
 }

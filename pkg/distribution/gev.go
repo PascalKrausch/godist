@@ -149,10 +149,11 @@ const (
 	// gevXiMax begrenzt den Formparameter nach oben; größere Werte sind in der
 	// Praxis für Blockmaxima-Daten nicht relevant.
 	gevXiMax = 5
-	// gevXiGradFD ist die |ξ|-Schwelle, unterhalb derer die ξ-Komponente des
-	// Gradienten per zentraler Differenz geschätzt wird (analytisch 0/0-Form).
-	gevXiGradFD = 1e-4
-	gevMaxIter  = 500
+	// gevXiGradV ist die |v| = |ξz|-Schwelle, unterhalb derer ds/dξ per Potenzreihe
+	// statt als Differenz (z/u − s)/ξ berechnet wird; dort wäre die Differenz
+	// numerisch instabil (hebbares 0/0-Verhalten bei ξ → 0).
+	gevXiGradV   = 0.05
+	gevMaxIter   = 500
 )
 
 // gevLogLik berechnet die Log-Likelihood eines GEV-Modells. ok ist false, wenn
@@ -195,14 +196,33 @@ func gevLogPDFTerm(x, mu, sigma, xi float64) (term float64, finite bool) {
 	return term, IsFinite(term)
 }
 
+// gevDsDxiSeries ist die Potenzreihe von ds/dξ in v = ξz:
+//
+//	ds/dξ = z²·Σ_{j≥0} (−1)^{j+1}·(j+1)/(j+2)·v^j  =  −z²/2 + (2/3)z²v − (3/4)z²v² + …
+//
+// Sie liefert den hebbaren Grenzwert −z²/2 für ξ → 0 und konvergiert für |v| < 1;
+// bei |v| ≤ gevXiGradV reichen acht Terme für ~1e-11 relative Genauigkeit.
+func gevDsDxiSeries(v float64) float64 {
+	return -0.5 + v*(2.0/3.0+v*(-0.75+v*(0.8+v*(-5.0/6.0+v*(6.0/7.0+v*(-7.0/8.0+v*(8.0/9.0)))))))
+}
+
+// gevDsDxi ist ds/dξ mit s = ln(1+ξz)/ξ. Geschlossene Form (z/u − s)/ξ; für
+// |ξz| klein die Potenzreihe, weil die Differenz dortaus katastrophaler
+// Kürzung leidet.
+func gevDsDxi(z, v, s, xi, u float64) float64 {
+	if math.Abs(v) <= gevXiGradV {
+		return z * z * gevDsDxiSeries(v)
+	}
+	return (z/u - s) / xi
+}
+
 // gevLogLikGrad liefert Log-Likelihood und Summen-Gradienten bezüglich
-// (μ, θ = ln σ, ξ). Für |ξ| < gevXiGradFD wird die ξ-Komponente per zentraler
-// Differenz geschätzt, weil die analytische Form dort eine hebbare 0/0-Stelle hat.
+// (μ, θ = ln σ, ξ). Die ξ-Komponente nutzt für |ξz| ≤ gevXiGradV eine
+// Potenzreihe; sie ist überall analytisch, ein FD-Nachschlag ist nicht nötig.
 func gevLogLikGrad(data []float64, mu, sigma, xi float64) (ll, gMu, gTheta, gXi float64, ok bool) {
 	if !(sigma > 0) || !IsFinite(mu) || !IsFinite(sigma) || !IsFinite(xi) {
 		return 0, 0, 0, 0, false
 	}
-	analyticXi := math.Abs(xi) >= gevXiGradFD
 	for _, x := range data {
 		z := (x - mu) / sigma
 		if xi == 0 {
@@ -213,6 +233,8 @@ func gevLogLikGrad(data []float64, mu, sigma, xi float64) (ll, gMu, gTheta, gXi 
 			ll += -math.Log(sigma) - z - t
 			gMu += (1 - t) / sigma
 			gTheta += -1 + z*(1-t)
+			// ξ → 0: s → z und ds/dξ → −z²/2 (Reihe bei v = 0).
+			gXi += -z - (t-1)*0.5*z*z
 			continue
 		}
 		v := xi * z
@@ -228,21 +250,32 @@ func gevLogLikGrad(data []float64, mu, sigma, xi float64) (ll, gMu, gTheta, gXi 
 		u := 1 + v
 		gMu += (xi + 1 - t) / (sigma * u)
 		gTheta += -1 + z*(xi+1-t)/u
-		if analyticXi {
-			dsDxi := (z/u - s) / xi
-			gXi += -s + (t-xi-1)*dsDxi
-		}
-	}
-	if !analyticXi {
-		const h = 1e-5
-		lp, okP := gevLogLik(data, mu, sigma, xi+h)
-		lm, okM := gevLogLik(data, mu, sigma, xi-h)
-		if !okP || !okM {
-			return 0, 0, 0, 0, false
-		}
-		gXi = (lp - lm) / (2 * h)
+		gXi += -s + (t-xi-1)*gevDsDxi(z, v, s, xi, u)
 	}
 	ok = IsFinite(ll) && IsFinite(gMu) && IsFinite(gTheta) && IsFinite(gXi)
+	return ll, gMu, gTheta, gXi, ok
+}
+
+// gevProfile cached das letzte Ergebnis von gevLogLikGrad: Func und Grad fragen im
+// L-BFGS am selben Punkt (μ, σ, ξ) ab, sodass der O(n)-Pass pro Optimierungsschritt
+// nur einmal läuft. Einträge sind bitgenau gekennzeichnet; abweichende Punkte sind
+// schlicht Cache-Misses.
+type gevProfile struct {
+	data []float64
+
+	cacheMu, cacheSigma, cacheXi             float64
+	cacheLL, cacheGMu, cacheGTheta, cacheGXi float64
+	cacheOK, cacheValid                      bool
+}
+
+func (p *gevProfile) eval(mu, sigma, xi float64) (ll, gMu, gTheta, gXi float64, ok bool) {
+	if p.cacheValid && p.cacheMu == mu && p.cacheSigma == sigma && p.cacheXi == xi {
+		return p.cacheLL, p.cacheGMu, p.cacheGTheta, p.cacheGXi, p.cacheOK
+	}
+	ll, gMu, gTheta, gXi, ok = gevLogLikGrad(p.data, mu, sigma, xi)
+	p.cacheMu, p.cacheSigma, p.cacheXi = mu, sigma, xi
+	p.cacheLL, p.cacheGMu, p.cacheGTheta, p.cacheGXi, p.cacheOK, p.cacheValid =
+		ll, gMu, gTheta, gXi, ok, true
 	return ll, gMu, gTheta, gXi, ok
 }
 
@@ -279,12 +312,13 @@ func (f GEVFitter) Fit(data []float64) (ContinuousDistribution, error) {
 	}
 
 	norm := 1 / float64(len(cleaned))
+	profile := &gevProfile{data: cleaned}
 	problem := optimize.Problem{
 		Func: func(v []float64) float64 {
 			if v[2] < gevXiMin || v[2] > gevXiMax {
 				return math.Inf(1)
 			}
-			ll, _, _, _, ok := gevLogLikGrad(cleaned, v[0], math.Exp(v[1]), v[2])
+			ll, _, _, _, ok := profile.eval(v[0], math.Exp(v[1]), v[2])
 			if !ok {
 				return math.Inf(1)
 			}
@@ -295,7 +329,7 @@ func (f GEVFitter) Fit(data []float64) (ContinuousDistribution, error) {
 				grad[0], grad[1], grad[2] = math.Inf(1), math.Inf(1), math.Inf(1)
 				return
 			}
-			_, gMu, gTheta, gXi, ok := gevLogLikGrad(cleaned, v[0], math.Exp(v[1]), v[2])
+			_, gMu, gTheta, gXi, ok := profile.eval(v[0], math.Exp(v[1]), v[2])
 			if !ok {
 				grad[0], grad[1], grad[2] = math.Inf(1), math.Inf(1), math.Inf(1)
 				return
@@ -307,10 +341,10 @@ func (f GEVFitter) Fit(data []float64) (ContinuousDistribution, error) {
 	}
 
 	settings := &optimize.Settings{
-		GradientThreshold: 1e-10,
+		GradientThreshold: 1e-9,
 		MajorIterations:   gevMaxIter,
-		FuncEvaluations:   20000,
-		GradEvaluations:   20000,
+		FuncEvaluations:   5000,
+		GradEvaluations:   5000,
 	}
 
 	var best GEV

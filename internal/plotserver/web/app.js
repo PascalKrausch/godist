@@ -206,6 +206,7 @@ function renderSummary(payload) {
       formatNumber(model.metrics.bic),
       formatNumber(model.metrics.ks),
       formatNumber(model.metrics.rmse),
+      formatNumber(model.metrics.duration_ms),
     ];
 
     cells.forEach((text, i) => {
