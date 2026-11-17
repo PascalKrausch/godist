@@ -16,6 +16,7 @@ Der verbindliche Vertrag ist [`json.schema.json`](json.schema.json) (JSON Schema
 
 - `schema_version` ist immer vorhanden (aktuell `1`). Neue optionale Felder sind nicht-brechend; Umbenennungen oder Entfernungen erhöhen die Version.
 - `failures` ist immer vorhanden (ggf. leeres Array).
+- `models[].bootstrap` ist optional und nur vorhanden, wenn `-bootstrap > 0` für dieses Modell lief (siehe [CLI.md, Bootstrap](CLI.md#bootstrap-konfidenzintervalle)). Es enthält `method` (`nonparametric` oder `parametric`), `requested`/`replicates`/`failed` (Anzahl Wiederholungen und Ausfälle), `level` (Konfidenzniveau), `seed` (für `-bootstrap-seed`), `duration_ms`, `params` (Array aus `name`, `mean`, `lo`, `hi`) und `metrics` (`aic`, `bic`, `ks`, `rmse` als `mean`/`lo`/`hi`).
 - Nicht berechenbare deskriptive Kennzahlen sind `null`.
 - Ist ein Wert nicht darstellbar (NaN/Inf), gibt es keine Teilausgabe: stdout bleibt leer, Exit-Code 1.
 
@@ -53,7 +54,26 @@ Der verbindliche Vertrag ist [`json.schema.json`](json.schema.json) (JSON Schema
       "bic": 1240.2,
       "ks_statistic": 0.0234,
       "rmse": 0.0156,
-      "duration_ms": 12.3
+      "duration_ms": 12.3,
+      "bootstrap": {
+        "method": "nonparametric",
+        "requested": 1000,
+        "replicates": 998,
+        "failed": 2,
+        "level": 0.95,
+        "seed": 42,
+        "duration_ms": 512.3,
+        "params": [
+          {"name": "shape", "mean": 2.51, "lo": 2.3, "hi": 2.75},
+          {"name": "scale", "mean": 1.19, "lo": 1.1, "hi": 1.3}
+        ],
+        "metrics": {
+          "aic": {"mean": 1236.1, "lo": 1228.0, "hi": 1245.2},
+          "bic": {"mean": 1241.8, "lo": 1233.7, "hi": 1250.9},
+          "ks": {"mean": 0.0241, "lo": 0.0188, "hi": 0.0312},
+          "rmse": {"mean": 0.0159, "lo": 0.0121, "hi": 0.0204}
+        }
+      }
     }
   ],
   "failures": []
@@ -78,6 +98,33 @@ type FitRow struct {
     KSStatistic float64            `json:"ks_statistic"`
     RMSE        float64            `json:"rmse"`
     DurationMs  float64            `json:"duration_ms,omitempty"`
+    // Optional; nil ohne -bootstrap. Typen siehe unten.
+    Bootstrap   *BootstrapResult   `json:"bootstrap,omitempty"`
+}
+
+type ParameterCI struct {
+    Name string  `json:"name"`
+    Mean float64 `json:"mean"`
+    Lo   float64 `json:"lo"`
+    Hi   float64 `json:"hi"`
+}
+
+type MetricCI struct {
+    Mean float64 `json:"mean"`
+    Lo   float64 `json:"lo"`
+    Hi   float64 `json:"hi"`
+}
+
+type BootstrapResult struct {
+    Method     string                `json:"method"`
+    Requested  int                   `json:"requested"`
+    Replicates int                   `json:"replicates"`
+    Failed     int                   `json:"failed"`
+    Level      float64               `json:"level"`
+    Seed       uint64                `json:"seed"`
+    DurationMs float64               `json:"duration_ms,omitempty"`
+    Params     []ParameterCI         `json:"params"`
+    Metrics    map[string]MetricCI   `json:"metrics"`
 }
 
 type Failure struct {
@@ -167,6 +214,24 @@ params = report["models"][0]["params"]
 ### TypeScript
 
 ```typescript
+interface MetricCI {
+  mean: number;
+  lo: number;
+  hi: number;
+}
+
+interface BootstrapResult {
+  method: "nonparametric" | "parametric";
+  requested: number;
+  replicates: number;
+  failed: number;
+  level: number;
+  seed: number;
+  duration_ms?: number;
+  params: { name: string; mean: number; lo: number; hi: number }[];
+  metrics: Record<string, MetricCI>; // Schluessel: aic, bic, ks, rmse
+}
+
 interface FitRow {
   name: string;
   params: Record<string, number>;
@@ -176,6 +241,7 @@ interface FitRow {
   ks_statistic: number;
   rmse: number;
   duration_ms?: number;
+  bootstrap?: BootstrapResult;
 }
 
 interface Failure {

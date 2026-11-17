@@ -39,7 +39,18 @@ func TestFitSubcommandWithFlagFileMatchesLegacy(t *testing.T) {
 	if codeLegacy != 0 || codeFit != 0 {
 		t.Fatalf("exit codes = %d, %d; want 0, 0", codeLegacy, codeFit)
 	}
-	if outLegacy != outFit {
+	// Die Runtime-Zeile ist laufenzeitabhängig und wird beim Vergleich ignoriert.
+	stripRuntime := func(s string) string {
+		lines := strings.Split(s, "\n")
+		kept := lines[:0]
+		for _, l := range lines {
+			if !strings.HasPrefix(l, "Runtime:") {
+				kept = append(kept, l)
+			}
+		}
+		return strings.Join(kept, "\n")
+	}
+	if stripRuntime(outLegacy) != stripRuntime(outFit) {
 		t.Error("fit -file=... weicht von der Legacy-Ausgabe ab")
 	}
 }

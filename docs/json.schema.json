@@ -98,7 +98,52 @@
         "bic": { "type": "number" },
         "ks_statistic": { "type": "number", "minimum": 0 },
         "rmse": { "type": "number", "minimum": 0 },
-        "duration_ms": { "type": "number", "minimum": 0, "description": "Walltime des Fits in Millisekunden. Optional." }
+        "duration_ms": { "type": "number", "minimum": 0, "description": "Walltime des Fits in Millisekunden. Optional." },
+        "bootstrap": {
+          "$ref": "#/$defs/bootstrapResult",
+          "description": "Bootstrap-Auswertung; nur vorhanden, wenn -bootstrap > 0 für dieses Modell lief."
+        }
+      }
+    },
+    "bootstrapResult": {
+      "type": "object",
+      "required": ["method", "requested", "replicates", "failed", "level", "seed", "params", "metrics"],
+      "properties": {
+        "method": { "enum": ["nonparametric", "parametric"] },
+        "requested": { "type": "integer", "minimum": 1 },
+        "replicates": { "type": "integer", "minimum": 0, "description": "Erfolgreich ausgewertete Wiederholungen." },
+        "failed": { "type": "integer", "minimum": 0, "description": "Fehlgeschlagene Wiederholungen (Fit oder Metrik)." },
+        "level": { "type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 1 },
+        "seed": { "type": "integer", "minimum": 0, "description": "Wirksamer Seed; reproduzierbar via -bootstrap-seed." },
+        "duration_ms": { "type": "number", "minimum": 0, "description": "Walltime aller Replicates zusammen. Optional." },
+        "params": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/parameterCI" }
+        },
+        "metrics": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/metricCI" },
+          "description": "Schluessel: aic, bic, ks, rmse."
+        }
+      }
+    },
+    "parameterCI": {
+      "type": "object",
+      "required": ["name", "mean", "lo", "hi"],
+      "properties": {
+        "name": { "type": "string" },
+        "mean": { "type": "number" },
+        "lo": { "type": "number" },
+        "hi": { "type": "number" }
+      }
+    },
+    "metricCI": {
+      "type": "object",
+      "required": ["mean", "lo", "hi"],
+      "properties": {
+        "mean": { "type": "number" },
+        "lo": { "type": "number" },
+        "hi": { "type": "number" }
       }
     }
   }

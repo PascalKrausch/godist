@@ -59,6 +59,11 @@ func runFitCommand(name string, args []string, allowPositional bool, stdout, std
 	distName := fs.String("distribution", "", "Genau eine Verteilung fitten, ohne Vergleich (z. B. weibull)")
 	include := fs.String("include", "", "Nur diese Verteilungen verwenden, kommasepariert (z. B. weibull,gamma)")
 	exclude := fs.String("exclude", "", "Diese Verteilungen auslassen, kommasepariert (z. B. cauchy,laplace)")
+	bootstrap := fs.Int("bootstrap", 0, "Bootstrap-Wiederholungen für Konfidenzintervalle von Parametern und Metriken (0 = aus)")
+	bootstrapMethod := fs.String("bootstrap-method", "nonparametric", "Bootstrap-Methode: nonparametric (Datenresampling) oder parametric (Sampling aus dem gefitteten Modell)")
+	bootstrapCI := fs.Float64("bootstrap-ci", 0.95, "Konfidenzniveau der Bootstrap-Intervalle in (0, 1)")
+	bootstrapSeed := fs.Uint64("bootstrap-seed", 0, "Seed für reproduzierbare Bootstrap-Läufe (0 = zufällig, wird auf stderr ausgegeben)")
+	bootstrapModel := fs.String("bootstrap-model", "best", "Für welche Modelle Bootstrap läuft: best (niedrigster AIC) oder all")
 
 	positional, err := parseArgs(fs, args)
 	if err != nil {
@@ -71,6 +76,13 @@ func runFitCommand(name string, args []string, allowPositional bool, stdout, std
 	filePath, err := resolveFilePath(*fileFlag, positional, allowPositional)
 	if err == nil {
 		err = validateFlags(filePath, *column, *format, *decimal, *allModels)
+	}
+	bootMethod, bootErr := distribution.ParseBootstrapMethod(*bootstrapMethod)
+	if err == nil {
+		err = bootErr
+	}
+	if err == nil {
+		err = validateBootstrapFlags(fs, *bootstrap, bootMethod, *bootstrapCI, *bootstrapModel)
 	}
 	if err != nil {
 		fmt.Fprintf(stderr, "Fehler: %v\n\n", err)
@@ -103,10 +115,23 @@ func runFitCommand(name string, args []string, allowPositional bool, stdout, std
 		fs.Usage()
 		return exitUsage
 	}
-	if *allModels {
-		return runAll(stdout, stderr, ds, filePath, *format, fitters)
+	bootCfg := distribution.BootstrapConfig{
+		B:      *bootstrap,
+		Method: bootMethod,
+		Level:  *bootstrapCI,
+		Seed:   *bootstrapSeed,
 	}
-	return runBest(stdout, stderr, ds, fitters)
+	if bootCfg.B > 0 {
+		if bootCfg.Seed == 0 {
+			bootCfg.Seed = distribution.RandomBootstrapSeed()
+		}
+		fmt.Fprintf(stderr, "Bootstrap: %d Wiederholungen (%s, %.0f%%-KI, Seed %d, Modell: %s)\n",
+			bootCfg.B, bootCfg.Method, bootCfg.Level*100, bootCfg.Seed, *bootstrapModel)
+	}
+	if *allModels {
+		return runAll(stdout, stderr, ds, filePath, *format, fitters, bootCfg, *bootstrapModel)
+	}
+	return runBest(stdout, stderr, ds, fitters, bootCfg)
 }
 
 // selectFitters übersetzt die Auswahl-Flags in Kandidaten. -distribution ist ein Sonderfall
@@ -241,14 +266,84 @@ func validateFlags(filePath, column, format, decimal string, allModels bool) err
 	return nil
 }
 
+// validateBootstrapFlags prüft die Bootstrap-Optionen. Die bootstrap-Optionen ohne
+// -bootstrap > 0 sind ein Fehler, damit ein versehentlich gesetzter Flag nicht ignoriert wird.
+func validateBootstrapFlags(fs *flag.FlagSet, b int, method distribution.BootstrapMethod, level float64, scope string) error {
+	if b < 0 {
+		return errors.New("-bootstrap muss >= 0 sein")
+	}
+	if level <= 0 || level >= 1 {
+		return fmt.Errorf("ungültiges -bootstrap-ci %v (erlaubt: Wert in (0, 1))", level)
+	}
+	if scope != "best" && scope != "all" {
+		return fmt.Errorf("ungültiges -bootstrap-model %q (erlaubt: best, all)", scope)
+	}
+	if b == 0 {
+		var stray []string
+		fs.Visit(func(f *flag.Flag) {
+			switch f.Name {
+			case "bootstrap-method", "bootstrap-ci", "bootstrap-seed", "bootstrap-model":
+				stray = append(stray, "-"+f.Name)
+			}
+		})
+		if len(stray) > 0 {
+			return fmt.Errorf("%s erfordert -bootstrap > 0", strings.Join(stray, ", "))
+		}
+	}
+	return nil
+}
+
+// applyBootstrap führt die Bootstrap-Wiederholungen für die gewählten Modelle aus
+// und hängt das Ergebnis an FitResult.Bootstrap. scope "best" beschränkt auf das
+// Modell mit dem kleinsten AIC, "all" auf alle erfolgreichen Fits.
+func applyBootstrap(results []distribution.FitResult, fitters []distribution.Fitter, data []float64, cfg distribution.BootstrapConfig, scope string, stderr io.Writer) {
+	if cfg.B <= 0 {
+		return
+	}
+	byName := make(map[string]distribution.Fitter, len(fitters))
+	for _, f := range fitters {
+		byName[f.Name()] = f
+	}
+
+	idxs := make([]int, 0, len(results))
+	if scope == "all" {
+		for i := range results {
+			idxs = append(idxs, i)
+		}
+	} else {
+		best := 0
+		for i := range results {
+			if results[i].Metrics.AIC < results[best].Metrics.AIC {
+				best = i
+			}
+		}
+		idxs = []int{best}
+	}
+
+	for _, i := range idxs {
+		fitter, ok := byName[results[i].Name]
+		if !ok {
+			fmt.Fprintf(stderr, "Warnung: kein Fitter für %s, Bootstrap übersprungen\n", results[i].Name)
+			continue
+		}
+		res, err := distribution.BootstrapFit(fitter, results[i].Dist, data, cfg)
+		if err != nil {
+			fmt.Fprintf(stderr, "Warnung: Bootstrap für %s fehlgeschlagen: %v\n", results[i].Name, err)
+			continue
+		}
+		results[i].Bootstrap = res
+	}
+}
+
 // runAll vergleicht alle Verteilungen und gibt den Bericht aus.
-func runAll(stdout, stderr io.Writer, ds cli.Dataset, filePath, format string, fitters []distribution.Fitter) int {
+func runAll(stdout, stderr io.Writer, ds cli.Dataset, filePath, format string, fitters []distribution.Fitter, bootCfg distribution.BootstrapConfig, bootScope string) int {
 	start := time.Now()
 	results, failures, err := distribution.SelectAllModelsFromFitters(ds.Values, fitters)
 	if err != nil {
 		fmt.Fprintf(stderr, "Fehler: Fitting fehlgeschlagen: %v\n", err)
 		return exitFailure
 	}
+	applyBootstrap(results, fitters, ds.Values, bootCfg, bootScope, stderr)
 	totalDuration := time.Since(start)
 
 	if format == "plot" {
@@ -300,13 +395,25 @@ func runPlot(stderr io.Writer, values []float64, results []distribution.FitResul
 }
 
 // runBest gibt nur das beste Modell aus.
-func runBest(stdout, stderr io.Writer, ds cli.Dataset, fitters []distribution.Fitter) int {
-	best, metrics, err := distribution.SelectBestModelFromFitters(ds.Values, fitters)
+func runBest(stdout, stderr io.Writer, ds cli.Dataset, fitters []distribution.Fitter, bootCfg distribution.BootstrapConfig) int {
+	results, _, err := distribution.SelectAllModelsFromFitters(ds.Values, fitters)
 	if err != nil {
 		fmt.Fprintf(stderr, "Fehler: Fitting fehlgeschlagen: %v\n", err)
 		return exitFailure
 	}
-	cli.WriteSummary(stdout, best, metrics, ds.Column, stats.Describe(ds.Values), len(ds.Discarded))
+	if len(results) == 0 {
+		fmt.Fprintln(stderr, "Fehler: kein geeignetes Modell gefunden")
+		return exitFailure
+	}
+	best := 0
+	for i := range results {
+		if results[i].Metrics.AIC < results[best].Metrics.AIC {
+			best = i
+		}
+	}
+	applyBootstrap(results, fitters, ds.Values, bootCfg, "best", stderr)
+	result := results[best]
+	cli.WriteSummary(stdout, result.Dist, result.Metrics, ds.Column, stats.Describe(ds.Values), len(ds.Discarded), result.Bootstrap)
 	return exitOK
 }
 
@@ -330,6 +437,7 @@ func writeUsage(w io.Writer, fs *flag.FlagSet) {
 	fmt.Fprintln(w, "  distfit -file=daten.csv -column=2 -decimal=, -all -format=json")
 	fmt.Fprintln(w, "  distfit -file=werte.txt -all -format=plot")
 	fmt.Fprintln(w, "  distfit -file=daten.csv -column=citric -zero-inflated -all")
+	fmt.Fprintln(w, "  distfit fit werte.txt -bootstrap=1000 -bootstrap-seed=42")
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Exit-Codes: 0 Erfolg, 1 Daten- oder Fitting-Fehler, 2 Aufruf-Fehler")
 }

@@ -25,6 +25,8 @@ type FitRow struct {
 	RMSE        float64            `json:"rmse"`
 	// DurationMs ist die Walltime des Fits in Millisekunden; 0, wenn nicht gemessen.
 	DurationMs float64 `json:"duration_ms,omitempty"`
+	// Bootstrap enthält die Bootstrap-Auswertung; nil, wenn keine Wiederholungen liefen.
+	Bootstrap *distribution.BootstrapResult `json:"bootstrap,omitempty"`
 }
 
 // JSONSchemaVersion ist die Version des JSON-Vertrags (docs/json.schema.json).
@@ -76,6 +78,7 @@ func BuildFitReport(results []distribution.FitResult, failures []distribution.Fi
 			KSStatistic: result.Metrics.KSStatistic,
 			RMSE:        result.Metrics.RMSE,
 			DurationMs:  result.Metrics.Duration.Seconds() * 1000,
+			Bootstrap:   result.Bootstrap,
 		})
 	}
 
@@ -167,6 +170,8 @@ func WriteTextReport(w io.Writer, report FitReport) error {
 		"Runtime",
 	}, tableRows)
 
+	writeBootstrapSection(w, report.Models)
+
 	if len(report.Failures) > 0 {
 		fmt.Fprintln(w)
 		fmt.Fprintln(w, "Models that could not be fitted:")
@@ -188,8 +193,57 @@ func WriteTextReport(w io.Writer, report FitReport) error {
 // Modellrangfolge nur für Extremwertdaten (z. B. Blockmaxima) fachlich plausibel ist.
 const extremeValueNote = "Hinweis: GEV ist eine Extremwertverteilung und nur für entsprechende Daten (z. B. Blockmaxima) fachlich sinnvoll; ein gutes AIC-Ranking ersetzt keine fachliche Prüfung der Datenherkunft und Modellannahmen."
 
+// writeBootstrapSection gibt die Bootstrap-Konfidenzintervalle der Modelle aus,
+// für die Wiederholungen gelaufen sind. Ohne Bootstrap bleibt der Bericht unverändert.
+func writeBootstrapSection(w io.Writer, models []FitRow) {
+	type entry struct {
+		model FitRow
+		boot  *distribution.BootstrapResult
+	}
+	var entries []entry
+	for _, m := range models {
+		if m.Bootstrap != nil {
+			entries = append(entries, entry{model: m, boot: m.Bootstrap})
+		}
+	}
+	if len(entries) == 0 {
+		return
+	}
+
+	fmt.Fprintln(w)
+	fmt.Fprintf(w, "Bootstrap confidence intervals (%s, Perzentil-Methode)\n", percentLabel(entries[0].boot.Level))
+	fmt.Fprintln(w, "----------------------------------------")
+	for _, e := range entries {
+		b := e.boot
+		fmt.Fprintf(w, "%s: %d/%d Replicates erfolgreich", e.model.Name, b.Replicates, b.Requested)
+		if b.Failed > 0 {
+			fmt.Fprintf(w, ", %d fehlgeschlagen", b.Failed)
+		}
+		fmt.Fprintf(w, " (%s)\n", formatRuntime(b.DurationMs))
+		for _, p := range b.Params {
+			fmt.Fprintf(w, "  %s: %.4g  [%.4g, %.4g]\n", p.Name, p.Mean, p.Lo, p.Hi)
+		}
+		var metricParts []string
+		for _, key := range []string{"aic", "bic", "ks", "rmse"} {
+			if ci, ok := b.Metrics[key]; ok {
+				metricParts = append(metricParts, fmt.Sprintf("%s [%.4g, %.4g]", key, ci.Lo, ci.Hi))
+			}
+		}
+		if len(metricParts) > 0 {
+			fmt.Fprintf(w, "  metrics: %s\n", strings.Join(metricParts, ", "))
+		}
+	}
+	fmt.Fprintln(w)
+}
+
+// percentLabel formatiert das Konfidenzniveau als Prozentzahl, z. B. "95%".
+func percentLabel(level float64) string {
+	return fmt.Sprintf("%.0f%%", level*100)
+}
+
 // WriteSummary schreibt das Ergebnis des Einzelmodells (bestes Modell) als Zusammenfassung.
-func WriteSummary(w io.Writer, dist distribution.ContinuousDistribution, metrics distribution.FitMetrics, column string, descriptive stats.Summary, discarded int) {
+// bootstrap darf nil sein, wenn keine Wiederholungen liefen.
+func WriteSummary(w io.Writer, dist distribution.ContinuousDistribution, metrics distribution.FitMetrics, column string, descriptive stats.Summary, discarded int, bootstrap *distribution.BootstrapResult) {
 	fmt.Fprintln(w, "=== GODIST FITTER ERGEBNIS ===")
 	if column != "" {
 		fmt.Fprintf(w, "Spalte:         %s\n", column)
@@ -205,8 +259,19 @@ func WriteSummary(w io.Writer, dist distribution.ContinuousDistribution, metrics
 	if getDistributionName(dist) == "GEV" {
 		fmt.Fprintln(w, extremeValueNote)
 	}
+	if bootstrap != nil {
+		writeBootstrapBlock(w, bootstrap)
+	}
 	fmt.Fprintln(w)
 	writeDescriptive(w, descriptive)
+}
+
+// writeBootstrapBlock gibt die Bootstrap-Konfidenzintervalle eines einzelnen Modells aus.
+func writeBootstrapBlock(w io.Writer, b *distribution.BootstrapResult) {
+	fmt.Fprintf(w, "Bootstrap (%s, Perzentil, %d/%d Replicates):\n", b.Method, b.Replicates, b.Requested)
+	for _, p := range b.Params {
+		fmt.Fprintf(w, "  %s: %.4g  [%.4g, %.4g]\n", p.Name, p.Mean, p.Lo, p.Hi)
+	}
 }
 
 // writeDescriptive schreibt die deskriptiven Kennzahlen als Block. Nicht berechenbare Werte erscheinen als Gedankenstrich.

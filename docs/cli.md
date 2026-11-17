@@ -50,6 +50,11 @@ Verworfene Eingaben (leere Zellen, Text, `NaN`, `±Inf`, `null`) werden nicht st
 | `-include` | Liste, kommasepariert | Nur diese Verteilungen verwenden. Schließt `-exclude` aus. |
 | `-exclude` | Liste, kommasepariert | Diese Verteilungen aus dem Katalog auslassen. |
 | `-zero-inflated` | – | Nullwerte als Zero-Inflated-Modell (Punktmasse bei 0) modellieren. Siehe unten. |
+| `-bootstrap` | Ganzzahl ≥ 0 | Anzahl Bootstrap-Wiederholungen für Konfidenzintervalle. `0` = aus (Standard). |
+| `-bootstrap-method` | `nonparametric` oder `parametric` | Stichproben-Erzeugung. Standard: `nonparametric`. Erfordert `-bootstrap`. |
+| `-bootstrap-ci` | Zahl in (0, 1) | Konfidenzniveau der Intervalle. Standard: `0.95`. Erfordert `-bootstrap`. |
+| `-bootstrap-seed` | Ganzzahl ≥ 0 | Fester Seed für reproduzierbare Läufe. `0` = zufällig; der wirksame Seed steht dann auf stderr. Erfordert `-bootstrap`. |
+| `-bootstrap-model` | `best` oder `all` | Für welche Modelle Bootstrap läuft: nur das AIC-beste (`best`, Standard) oder alle erfolgreichen Fits (`all`). Erfordert `-bootstrap`. |
 
 Im Hilfetext (`distfit -h`) stehen dieselben Flags mit Kurzbeschreibung.
 
@@ -121,6 +126,51 @@ Ohne Auswahlflag werden alle 20 Kandidaten verwendet. Mit den folgenden Flags l�
 - Mit `-zero-inflated` und einer nicht ZI-fähigen Verteilung (`-distribution=normal`, `-include=weibull,normal`) gilt Exit `2`: `Normal unterstützt keine Zero-Inflation`.
 
 Die AIC-Werte mit und ohne `-zero-inflated` sind nicht miteinander vergleichbar, weil die Modelle unterschiedlich viele Parameter und Datenpunkte verwenden.
+
+## Bootstrap-Konfidenzintervalle
+
+Mit `-bootstrap=B` werden pro Modell `B` Bootstrap-Wiederholungen ausgeführt: Der Fit wird auf resampelten Daten wiederholt und die Verteilung der geschätzten Parameter und Gütemetriken (AIC, BIC, KS, RMSE) wird als Perzentil-Konfidenzintervall zum Niveau `-bootstrap-ci` zusammengefasst. `B = 0` (Standard) schaltet das Feature ab; die bootstrap-Flags ohne `-bootstrap` sind ein Aufruffehler (Exit `2`).
+
+```bash
+# KI nur für das beste Modell (Standard)
+distfit fit werte.txt -bootstrap=1000 -bootstrap-seed=42
+
+# KI für alle Kandidaten, parametrisch, 90%-Niveau
+distfit fit werte.txt -all -bootstrap=500 -bootstrap-model=all \
+    -bootstrap-method=parametric -bootstrap-ci=0.9
+```
+
+Die Intervalle erscheinen im Textbericht als Abschnitt „Bootstrap confidence intervals“ (mit `-all`) bzw. als Block in der Einzelmodellausgabe, im JSON als optionales Feld `bootstrap` je Modell (siehe [JSON.md](JSON.md)). Auf stderr meldet die CLI die Parameter: Anzahl Wiederholungen, Methode, Niveau, Seed und Modellumfang; der Seed macht den Lauf mit `-bootstrap-seed` reproduzierbar.
+
+### Methoden
+
+- **`nonparametric`** (Standard): Jede Replicate zieht `n` Werte mit Zurücklegen aus den (bereinigten) Daten und fitet erneut. Keine Verteilungsannahme für die Stichprobe; robust, aber bei kleinen `n` und Schiefheit können die Intervalle asymmetrisch und breit sein.
+- **`parametric`**: Jede Replicate zieht `n` Werte aus der *gefiteten* Verteilung (Inversion über `Quantile`) und fitet erneut. Engere Intervalle, aber nur sinnvoll, wenn das Modell die Daten wirklich beschreibt — die Aussagekraft hängt an der Modellgüte, nicht an den Daten.
+
+Replicates, deren Fit oder Metrikberechnung scheitert (z. B. Zero-Inflated-Modelle ohne Nullwerte in der Resample, Grenzfälle bei Beta/Pareto), werden gezählt (`failed`) und nicht stillschweigend aus dem Ergebnis entfernt; die Kennzahlen `replicates`/`requested` zeigen die Ausfallquote. Unter 2 erfolgreichen Replicates gibt es keine Intervalle.
+
+### Aussagekraft und Grenzen
+
+- Die Intervalle sind **Perzentil-Intervalle** (kein Bias-Corrected-and-Accelerated): einfach und robust, aber bei stark schiefen oder grenznahen Schätzungen (z. B. GEV-Formparameter) können sie die tatsächliche Überdeckungswahrscheinlichkeit verfehlen.
+- Ein Überlappen zweier Modell-Intervalle ist **kein** formeller Modellvergleich — es ist ein Hinweis auf nicht unterscheidbare Parameter, nicht auf gleiche Modellgüte. Die Modellauswahl bleibt Sache des AIC.
+- Parametrisches Bootstrap setzt ein korrekt spezifiziertes Modell voraus; es beantwortet „wie streuen die Schätzer, wenn das Modell stimmt“, nicht „stimmt das Modell“.
+- Für sehr kleine Stichproben (`n` unter ~20) sind die Intervalle typischerweise so breit, dass sie wenig Information tragen; die CLI warnt in diesem Fall bereits separat.
+- `-format=plot` zeigt die Bootstrap-Ergebnisse nicht an; die Daten stehen nur in Text- und JSON-Ausgabe.
+
+### Performance
+
+Jede Replicate ist ein vollständiger Fit plus Metrikberechnung; die Kosten skalieren etwa linear mit `B` und mit der Anzahl der Modelle (`-bootstrap-model=all` multipliziert den Aufwand mit der Kandidatenzahl). Die Replicates laufen parallel in einem Worker-Pool der Größe `GOMAXPROCS`.
+
+Gemessen auf Apple M3 (`go test -bench=Bootstrap -benchtime=1x ./pkg/distribution`), `n = 1000`, `B = 100`:
+
+| Methode | Zeit für B=100 |
+|---------|----------------|
+| `nonparametric` | ca. 5 ms |
+| `parametric` | ca. 6 ms |
+
+Das sind ~50 µs pro Replicate; `B = 1000` kostet also etwa 50 ms pro Modell. Der Flaschenhals ist bei teuren Fittern (L-BFGS-MLE wie GEV, StudentT, GeneralizedGamma, BurrXII) deutlich höher — dort sollte `B` kleiner gewählt oder `-bootstrap-model=best` verwendet werden. `duration_ms` im Bootstrap-Objekt bzw. die Runtime in der Textausgabe zeigt die tatsächlich verbrauchte Zeit.
+
+Praxisbeispiel (Apple M3, `winequality-red.csv`, `density`, n = 1599, `B = 200`, `-bootstrap-model=all`): alle 19 erfolgreichen Modelle in **1,3 s** Wandzeit (~8 s CPU über 8 Kerne). Pro Modell für B = 200: die meisten unter 25 ms, die L-BFGS-Fitter deutlich teurer — GEV ca. 420 ms, SkewNormal ca. 360 ms, GeneralizedGamma ca. 120 ms, StudentT ca. 60 ms. Ein Lauf mit `B = 1000` über alle Modelle liegt damit grob im einstelligen Sekundenbereich; bei `B = 10000` sollte `-bootstrap-model=best` oder eine `-include`-Einschränkung gewählt werden.
 
 ## Ausgabeformate
 

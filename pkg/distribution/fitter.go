@@ -40,29 +40,37 @@ func EvaluateFit(dist ContinuousDistribution, data []float64) (FitMetrics, error
 	ksStat := 0.0
 	sumSquaredErrors := 0.0
 
-	for i, x := range sortedData {
-		modelCDF := dist.CDF(x)
-
-		// Empirische CDF (ECDF) Stufen: lower = (i)/N, upper = (i+1)/N
-		ecdfLower := float64(i) / nFloat
-		ecdfUpper := float64(i+1) / nFloat
-
-		// Maximum Distance für Kolmogorov-Smirnov Test
-		dLower := math.Abs(modelCDF - ecdfLower)
-		dUpper := math.Abs(modelCDF - ecdfUpper)
-
-		if dLower > ksStat {
-			ksStat = dLower
+	for i := 0; i < n; {
+		// Gruppen gleicher Werte (Ties) zusammenfassen: die ECDF springt von i/n auf j/n.
+		j := i + 1
+		for j < n && sortedData[j] == sortedData[i] {
+			j++
 		}
-		if dUpper > ksStat {
-			ksStat = dUpper
+		x := sortedData[i]
+		ecdfLeft := float64(i) / nFloat
+		ecdfRight := float64(j) / nFloat
+
+		// Maximum Distance für Kolmogorov-Smirnov Test: nur passende Seiten paaren.
+		// Bei Sprüngen der Modell-CDF (Punktmasse bei 0 in ZeroInflated) ist F(x-) != F(x),
+		// daher wird der linksseitige Grenzwert über den nächsten darstellbaren Wert < x gebildet.
+		modelLeft := dist.CDF(math.Nextafter(x, math.Inf(-1)))
+		modelRight := dist.CDF(x)
+
+		if d := math.Abs(modelLeft - ecdfLeft); d > ksStat {
+			ksStat = d
+		}
+		if d := math.Abs(modelRight - ecdfRight); d > ksStat {
+			ksStat = d
 		}
 
 		// RMSE-Berechnung gegen die kontinuierliche Plotting-Position (Hazens Formel: (i - 0.5) / N)
 		// Dies ist symmetrischer und robuster als der reine obere Sprungpunkt
-		ecdfMid := (float64(i) + 0.5) / nFloat
-		err := modelCDF - ecdfMid
-		sumSquaredErrors += err * err
+		for k := i; k < j; k++ {
+			ecdfMid := (float64(k) + 0.5) / nFloat
+			err := modelRight - ecdfMid
+			sumSquaredErrors += err * err
+		}
+		i = j
 	}
 
 	rmse := math.Sqrt(sumSquaredErrors / nFloat)

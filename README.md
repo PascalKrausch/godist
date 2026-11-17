@@ -94,6 +94,10 @@ Ein niedrigerer AIC bedeutet, dass ein Modell relativ zu den betrachteten Kandid
 
 Für kleine Stichproben kann ergänzend AICc untersucht werden. Dabei sind die Anwendbarkeit und die Regularitätsannahmen – insbesondere bei geschätzten Support-Grenzen – gesondert zu berücksichtigen.
 
+### Bootstrap-Konfidenzintervalle
+
+Optional (`-bootstrap=B`) werden pro Modell `B` Bootstrap-Wiederholungen ausgeführt und Perzentil-Konfidenzintervalle für die Parameter und die Gütemetriken (AIC, BIC, KS, RMSE) berechnet. Zwei Stichproben-Methoden stehen zur Wahl: `nonparametric` (Resampling der Daten mit Zurücklegen) und `parametric` (Sampling aus der gefitteten Verteilung). Anzahl, Niveau (`-bootstrap-ci`), Methode, Seed (`-bootstrap-seed`) und Modellumfang (`-bootstrap-model=best|all`) sind konfigurierbar; Details, Aussagekraft und Performance stehen in [docs/CLI.md](docs/CLI.md#bootstrap-konfidenzintervalle).
+
 ## Erledigt
 
 ### Datenvalidierung und Edge-Cases

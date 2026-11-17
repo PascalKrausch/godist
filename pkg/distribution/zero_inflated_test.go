@@ -108,6 +108,51 @@ func TestZeroInflatedEvaluateFitCountsPZeroParameter(t *testing.T) {
 	}
 }
 
+func TestZeroInflatedKSRespectsPointMassJump(t *testing.T) {
+	// Die Modell-CDF springt bei 0 von 0 auf PZero; der KS-Test darf F(0-) nicht mit
+	// ECDF-Werten der linken Seite paaren (sonst wird D massiv überschätzt).
+	data := []float64{0, 0, 0, 0, 0.5, 1, 2, 3, 4, 5, 6, 2.5, 10}
+	dist, err := ZeroInflatedFitter{Base: GammaFitter{}}.Fit(data)
+	if err != nil {
+		t.Fatalf("Fit() error = %v", err)
+	}
+	metrics, err := EvaluateFit(dist, data)
+	if err != nil {
+		t.Fatalf("EvaluateFit() error = %v", err)
+	}
+
+	// Referenz: Supremum von |F - G| über alle ECDF-Sprungseiten der Beobachtungen
+	// sowie den linksseitigen Grenzwert der Modell-CDF.
+	n := float64(len(data))
+	ecdf := func(x float64) float64 {
+		c := 0
+		for _, v := range data {
+			if v <= x {
+				c++
+			}
+		}
+		return float64(c) / n
+	}
+	want := 0.0
+	check := func(x float64) {
+		if d := math.Abs(dist.CDF(x) - ecdf(x)); d > want {
+			want = d
+		}
+	}
+	for _, v := range []float64{0, 0.5, 1, 2, 2.5, 3, 4, 5, 6, 10} {
+		check(v)
+		check(math.Nextafter(v, math.Inf(-1)))
+	}
+
+	// PZero = 4/13; ein falscher Vergleich F(0) gegen die linke ECDF-Seite würde D = 4/13 liefern.
+	if metrics.KSStatistic >= 0.3 {
+		t.Errorf("KSStatistic = %v; F(0) wurde gegen die linke ECDF-Seite verglichen (PZero = %v)", metrics.KSStatistic, 4.0/13.0)
+	}
+	if math.Abs(metrics.KSStatistic-want) > 1e-9 {
+		t.Errorf("KSStatistic = %v, want %v", metrics.KSStatistic, want)
+	}
+}
+
 func TestSelectAllModelsZeroInflatedPolicyOnlyRanksZIModels(t *testing.T) {
 	data := []float64{0, 0, 0, 1, 2, 3, 4, 5, 6, 7}
 

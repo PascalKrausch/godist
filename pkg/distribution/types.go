@@ -28,6 +28,8 @@ type FitResult struct {
 	Name    string
 	Dist    ContinuousDistribution
 	Metrics FitMetrics
+	// Bootstrap enthält die Bootstrap-Auswertung, falls für dieses Modell Wiederholungen liefen.
+	Bootstrap *BootstrapResult
 }
 
 // FitMetrics enthält verschiedene Metriken zur Bewertung der Güte eines Fits.
