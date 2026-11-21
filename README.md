@@ -7,15 +7,6 @@
 >
 > **Aktueller Stand:** 20 Verteilungen sind implementiert. Die Tests in `pkg/distribution`, `internal/cli` und `cmd/distfit` laufen grün (`go test ./...`). Der CLI-Prototyp verarbeitet reale Datensätze (z. B. `winequality-red.csv`). Nullwerte werden strikt behandelt (siehe [Methodik])
 
-## Ziele
-
-- Stetige Verteilungen über eine gemeinsame Go-Schnittstelle anbieten.
-- Verteilungsparameter aus Messdaten schätzen.
-- Mehrere Modelle vergleichbar fitten und nach AIC sortieren.
-- Zusätzliche Kennzahlen wie BIC, KS-Statistik und RMSE bereitstellen.
-- Das gleiche Analyseergebnis als menschenlesbaren Terminalbericht und maschinenlesbare JSON-Ausgabe bereitstellen.
-- Die mathematische Bibliothek unabhängig von CLI, Dateiformaten und Darstellung halten.
-- Korrektheit und Robustheit zuerst absichern; anschließend Laufzeit und GC-Allokationen messen und gezielt optimieren.
 
 ## Unterstützte Verteilungen
 
@@ -98,11 +89,12 @@ Für kleine Stichproben kann ergänzend AICc untersucht werden. Dabei sind die A
 
 Optional (`-bootstrap=B`) werden pro Modell `B` Bootstrap-Wiederholungen ausgeführt und Perzentil-Konfidenzintervalle für die Parameter und die Gütemetriken (AIC, BIC, KS, RMSE) berechnet. Zwei Stichproben-Methoden stehen zur Wahl: `nonparametric` (Resampling der Daten mit Zurücklegen) und `parametric` (Sampling aus der gefitteten Verteilung). Anzahl, Niveau (`-bootstrap-ci`), Methode, Seed (`-bootstrap-seed`) und Modellumfang (`-bootstrap-model=best|all`) sind konfigurierbar; Details, Aussagekraft und Performance stehen in [docs/CLI.md](docs/CLI.md#bootstrap-konfidenzintervalle).
 
-## Erledigt
+## Tests
 
-### Datenvalidierung und Edge-Cases
+Die Testsuite besteht derzeit aus ca. 25 Testdateien und mehr als 100 Einzeltests.
+Es folgt ein kurzer Überblick über den Testumfang:
 
-Getestet werden unter anderem 
+### Datenvalidierung
 
 - Leere Daten
 - Konstante Daten
@@ -111,48 +103,34 @@ Getestet werden unter anderem
 - Sehr kleine und große Werte
 - Numerischer Über- und Unterlauf
 
-### Tests
+### Fitter 
 
-- Unit-Tests für alle bisher unterstützten Verteilungen 
+- Unit-Tests für alle unterstützten Verteilungen 
 - Eigenschaftstests (CDF monoton, PDF ≥ 0, LogPDF = log(PDF))
 - Numerische Integrationstests
 - Regressionstests
 - Modellranking-Tests
-- CLI-Tests
-- CI-Pipeline integriert
 
-### Performancemessungen und Optimierungen
+### CLI-Tests
 
-- Benchmarks für alle Fitter und vollständigen Modellvergleich mit synthetischen Datensätzen
-- Beta-Fitter von 82 allocs/op auf 70 allocs/ops optimiert
-- Weibull von Bisektionsverfahren (konvergiert linear) auf Newton-Raphson (konvergiert quadratisch) umgestellt. Bisektion wird als Fallback beibehalten
+- Verhalten im Fehlerfall (Exit-Codes)
+- Umgang mit fehlgeschlagenen Fits (Discarded im JSON-Format) 
+- Wenige oder identische Daten
+- Flagtests
+- Dashboard-Tests
+- API-Tests
 
-## To-Do
+### Performancetests
 
-### CLI und Einleselogik
+- Benchmarks für alle Verteilungen für 100, 10000 und 1000000 synthetische Daten
+- Benchmarks für den Gesamtlauf (skaliert ungefähr linear ca. 25ms für n=10000 und 2-3 s für n=1000000)
+- Benchmarks für parallelen und sequenziellen Lauf (Parallelität reduziert die Laufzeit um Faktor 4 auf Apple M3, 8 CPU-Kerne)
 
-Der Unterbefehl `fit`, `list distributions` sowie die Flags `-distribution`, `-include` und `-exclude` sind implementiert (siehe [docs/cli.md](docs/cli.md)). Noch offen:
+## Weitere Schritte
 
-- JSON-Schema für `list distributions -format=json`.
-- Python-Consumer-Test für `--distribution` und `-include`/`-exclude` in `consumers/python/`.
-- Golden-Test für die Textausgabe von `list distributions`.
-
-### Weitere Verteilungen
-
-Geplant sind derzeit:
-
-- SkewNormal
-- Burr XII
-
-### Dokumentation
-
-- README-Beispiele mit tatsächlich ausführbaren Befehlen synchron halten.
-- Parameterkonventionen und Support jeder Verteilung dokumentieren.
-- Grenzen von AIC, BIC, KS und RMSE erklären (siehe [Methodik](#methodik)).
-- Versionierung und kompatible Änderungen der Bibliotheks-API festlegen.
-- Erst nach bestandenen Validierungs- und Regressionstests einen produktiven Einsatz empfehlen.
-
-
+Der numerische Kern ist weitgehend implementiert und getestet. 
+Die zukünftige Entwicklung wird sich daher auf Modellvalidierung und Unsicherheitsdiagostik konzentrieren.
+Der detaillierte Plan ist dem Dokument docs/roadmap_new.md zu entnehmen.
 
 ## Schnellstart
 
@@ -178,7 +156,8 @@ go test -bench=. -benchmem ./...
 | CLI: Flags, Eingabeformate, Mindeststichprobe, Zielinterface | [docs/cli.md](docs/cli.md) |
 | JSON-Ausgabe und Einbindung in Go, Python, TypeScript | [docs/json.md](docs/json.md) |
 | Evaluation: Vergleich mit SciPy, Benchmarks | [docs/evaluation.md](docs/evaluation.md) |
-| Roadmap und nächste Schritte | [docs/roadmap.md](docs/roadmap.md) |
+| Roadmap und nächste Schritte | [docs/roadmap_new.md](docs/roadmap_new.md) |
+| Alte Roadmap und Projektanfänge | [docs/roadmap_old.md](docs/roadmap_old.md) |
 
 ## Grundsatz
 

@@ -4,7 +4,11 @@ evaluation/__pycache__/
 /distribution.test
 /escape.txt
 /mem.out
-docs/roadmap.md
 
+
+examples/penguins
+
+pkg/distribution/hartigans_dip_test.go
+pkg/distribution/hartigans_dip.go
 
 evaluation/bench_results/

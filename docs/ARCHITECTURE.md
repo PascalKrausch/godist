@@ -1,49 +1,32 @@
 # Architektur
 
+## Überblick
+
 ```text
-.
-├── cmd/
-│   └── distfit/
-│       └── main.go           # CLI-Einstiegspunkt
-├── evaluation/
-│   ├── bench.py              # Benchmarks godist vs. SciPy (Zeit, Speicher)
-│   └── compare.py            # Vergleich der Fits mit SciPy
-├── internal/
-│   └── cli/
-│       └── report.go         # Terminal- und JSON-Bericht
-│   └── stats/
-│       └── stats.go          # Deskriptive Kennzahlen (Mittelwert, Quantile, Schiefe, Kurtosis)
-├── pkg/
-│   └── distribution/
-│       ├── beta.go
-│       ├── data_cleaning.go
-│       ├── distributions_test.go
-│       ├── exponential.go
-│       ├── fitter.go
-│       ├── fitter_test.go
-│       ├── fitters_test.go
-│       ├── gamma.go
-│       ├── gaussian.go
-│       ├── gumbel.go
-│       ├── laplace.go
-│       ├── logistic.go
-│       ├── loglogistic.go
-│       ├── log_normal.go
-│       ├── numerical_stability_test.go
-│       ├── cauchy.go
-│       ├── chisquare.go
-│       ├── pareto.go
-│       ├── rayleigh.go
-│       ├── regression_test.go
-│       ├── requirements_test.go
-│       ├── studentt.go
-│       ├── types.go
-│       └── weibull.go
-├── go.mod
-└── go.sum
+cmd/distfit/          CLI-Einstiegspunkt
+internal/cli/         Kommandos, Eingabe, Terminal- und JSON-Bericht
+internal/stats/       Deskriptive Kennzahlen
+internal/plot/        Diagrammdaten (ohne Darstellung)
+internal/plotserver/  HTTP-Server, JSON-API, eingebettetes Frontend
+pkg/distribution/     Verteilungen, Schätzverfahren, Modellauswahl
+evaluation/           Vergleich und Benchmarks gegen SciPy (Python)
+examples/             Beispielprogramme
 ```
 
-Die CLI-Schicht in `cmd/` und `internal/cli/` soll die Verteilungsbibliothek aufrufen, aber keine Verteilungsformeln oder Schätzverfahren implementieren. Das Package `pkg/distribution` soll ohne Kommandozeilenabhängigkeiten verwendbar bleiben.
+Abhängigkeiten zeigen nur nach unten: `cmd` → `internal` → `pkg`. `pkg/distribution` importiert keine Pakete aus `internal/` oder `cmd/` und bleibt ohne Kommandozeilenabhängigkeit verwendbar.
+
+## Datenfluss
+
+1. `cmd/distfit` startet ein Kommando aus `internal/cli`.
+2. `internal/cli` liest und bereinigt die Eingabedaten.
+3. `pkg/distribution` wählt das Modell. Die Kandidaten kommen aus `Catalog()`; jeder Eintrag ist ein `Fitter`.
+4. Für die Ausgabe berechnet `internal/stats` die Kennzahlen und `internal/plot` die Diagrammdaten.
+5. `internal/plotserver` liefert die Diagrammdaten als JSON an den Browser.
+
+## Neue Verteilung hinzufügen
+
+1. Typ implementieren, der `ContinuousDistribution` erfüllt, und einen `Fitter` dafür schreiben.
+2. Eintrag in `Catalog()` (`pkg/distribution/catalog.go`) mit Name, Parametern, Wertebereich und `Fitter` ergänzen. Die Parameternamen müssen in derselben Reihenfolge stehen wie `ParamNames()`.
 
 ## Kerninterfaces
 
@@ -70,7 +53,7 @@ type Fitter interface {
 ## Plot-Schicht
 
 - `internal/plot` berechnet die Diagrammdaten (`BuildPayloadWithBins`): Histogramm, ECDF, PDF- und CDF-Kurven der Modelle auf einem gemeinsamen Raster sowie Q-Q-Punkte. Die Darstellung findet dort nicht statt. Die deskriptiven Kennzahlen kommen aus `internal/stats` (`Describe`) und stehen im Feld `descriptive`.
-- `internal/plotserver` bettet das Frontend (`web/`, uPlot) per `go:embed` ein und liefert es zusammen mit der JSON-API aus. Anfragen mit fremdem Host-Header werden abgelehnt.
+- `internal/plotserver` bettet das Frontend (`internal/plotserver/web/`, uPlot) per `go:embed` ein und liefert es zusammen mit der JSON-API aus. Anfragen mit fremdem Host-Header werden abgelehnt.
 - Die Datenquelle wird pro Anfrage aufgerufen (`plotserver.Source`), damit die Klassenanzahl im Browser geändert werden kann, ohne den Server neu zu starten.
 
 API: `GET /api/plot` liefert das Payload als JSON. Der optionale Parameter `bins` (1 bis 500) setzt die Klassenanzahl des Histogramms; ohne Parameter wird sie nach Freedman-Diaconis gewählt. Ungültige Werte liefern `400 Bad Request`.
