@@ -8,7 +8,6 @@ evaluation/__pycache__/
 
 examples/penguins
 
-pkg/distribution/hartigans_dip_test.go
-pkg/distribution/hartigans_dip.go
+
 
 evaluation/bench_results/

@@ -89,6 +89,8 @@ Für kleine Stichproben kann ergänzend AICc untersucht werden. Dabei sind die A
 
 Optional (`-bootstrap=B`) werden pro Modell `B` Bootstrap-Wiederholungen ausgeführt und Perzentil-Konfidenzintervalle für die Parameter und die Gütemetriken (AIC, BIC, KS, RMSE) berechnet. Zwei Stichproben-Methoden stehen zur Wahl: `nonparametric` (Resampling der Daten mit Zurücklegen) und `parametric` (Sampling aus der gefitteten Verteilung). Anzahl, Niveau (`-bootstrap-ci`), Methode, Seed (`-bootstrap-seed`) und Modellumfang (`-bootstrap-model=best|all`) sind konfigurierbar; Details, Aussagekraft und Performance stehen in [docs/CLI.md](docs/CLI.md#bootstrap-konfidenzintervalle).
 
+Optional (`-dip`) wird zusätzlich Hartigans Dip-Test auf die Eingabestichprobe ausgeführt: Er prüft die Nullhypothese Unimodalität der Daten (nicht des Modells) und liefert Dip-Statistik und Monte-Carlo-p-Wert. Simulationszahl und Seed sind über `-dip-simulations` und `-dip-seed` konfigurierbar; in der JSON-Ausgabe erscheint das optionale Feld `dip_test`. Details stehen in [docs/CLI.md](docs/CLI.md#dip-test-unimodalität).
+
 ## Tests
 
 Die Testsuite besteht derzeit aus ca. 25 Testdateien und mehr als 100 Einzeltests.

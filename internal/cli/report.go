@@ -45,6 +45,8 @@ type FitReport struct {
 	Descriptive      stats.Summary             `json:"descriptive"`
 	Models           []FitRow                  `json:"models"`
 	Failures         []distribution.FitFailure `json:"failures"`
+	// Dip enthält das Ergebnis des Hartigan-Dip-Tests; nil, wenn -dip nicht gesetzt war.
+	Dip *DipReport `json:"dip_test,omitempty"`
 	// TotalDurationMs ist die Walltime aller Fits zusammen in Millisekunden; 0, wenn nicht gemessen.
 	TotalDurationMs float64 `json:"total_duration_ms,omitempty"`
 }
@@ -98,6 +100,7 @@ func WriteTextReport(w io.Writer, report FitReport) error {
 		}
 		fmt.Fprintln(w)
 		writeDescriptive(w, report.Descriptive)
+		writeDipSection(w, report.Dip)
 		return nil
 	}
 	fmt.Fprintln(w)
@@ -127,6 +130,7 @@ func WriteTextReport(w io.Writer, report FitReport) error {
 	fmt.Fprintln(w)
 
 	writeDescriptive(w, report.Descriptive)
+	writeDipSection(w, report.Dip)
 
 	best := report.Models[0]
 
@@ -242,8 +246,8 @@ func percentLabel(level float64) string {
 }
 
 // WriteSummary schreibt das Ergebnis des Einzelmodells (bestes Modell) als Zusammenfassung.
-// bootstrap darf nil sein, wenn keine Wiederholungen liefen.
-func WriteSummary(w io.Writer, dist distribution.ContinuousDistribution, metrics distribution.FitMetrics, column string, descriptive stats.Summary, discarded int, bootstrap *distribution.BootstrapResult) {
+// bootstrap und dip dürfen nil sein, wenn die jeweiligen Tests nicht liefen.
+func WriteSummary(w io.Writer, dist distribution.ContinuousDistribution, metrics distribution.FitMetrics, column string, descriptive stats.Summary, discarded int, bootstrap *distribution.BootstrapResult, dip *DipReport) {
 	fmt.Fprintln(w, "=== GODIST FITTER ERGEBNIS ===")
 	if column != "" {
 		fmt.Fprintf(w, "Spalte:         %s\n", column)
@@ -264,6 +268,7 @@ func WriteSummary(w io.Writer, dist distribution.ContinuousDistribution, metrics
 	}
 	fmt.Fprintln(w)
 	writeDescriptive(w, descriptive)
+	writeDipSection(w, dip)
 }
 
 // writeBootstrapBlock gibt die Bootstrap-Konfidenzintervalle eines einzelnen Modells aus.
@@ -286,6 +291,8 @@ func writeDescriptive(w io.Writer, s stats.Summary) {
 	fmt.Fprintf(w, "Q1 / Q3:      %s / %s\n", formatStat(s.Q1), formatStat(s.Q3))
 	fmt.Fprintf(w, "Skewness:     %s\n", formatStat(s.Skewness))
 	fmt.Fprintf(w, "Kurtosis:     %s (excess)\n", formatStat(s.Kurtosis))
+	fmt.Fprintf(w, "Ties:         %d (%s)\n", s.Ties, formatStat(s.TieRate))
+	fmt.Fprintf(w, "Max tie run:  %d (%s)\n", s.MaxTieRun, formatStat(s.MaxTieRate))
 	fmt.Fprintln(w)
 }
 

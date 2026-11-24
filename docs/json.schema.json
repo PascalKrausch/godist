@@ -46,9 +46,20 @@
       "minimum": 0,
       "description": "Walltime aller Fits zusammen in Millisekunden (parallel). Optional."
     },
+    "dip_test": {
+      "type": "object",
+      "required": ["dip", "p_value", "simulations", "seed"],
+      "properties": {
+        "dip": { "type": "number", "minimum": 0, "maximum": 0.25 },
+        "p_value": { "type": "number", "minimum": 0, "maximum": 1 },
+        "simulations": { "type": "integer", "minimum": 1 },
+        "seed": { "type": "integer", "minimum": 0 }
+      },
+      "description": "Hartigan-Dip-Test auf die Eingabestichprobe (Unimodalität). Nur vorhanden bei -dip."
+    },
     "descriptive": {
       "type": "object",
-      "required": ["n", "mean", "median", "variance", "std_dev", "min", "q1", "q3", "max", "skewness", "kurtosis"],
+      "required": ["n", "mean", "median", "variance", "std_dev", "min", "q1", "q3", "max", "skewness", "kurtosis", "ties", "tie_rate", "max_tie_run"],
       "properties": {
         "n": { "type": "integer", "minimum": 0 },
         "mean": { "$ref": "#/$defs/nullableNumber" },
@@ -60,7 +71,10 @@
         "q3": { "$ref": "#/$defs/nullableNumber" },
         "max": { "$ref": "#/$defs/nullableNumber" },
         "skewness": { "$ref": "#/$defs/nullableNumber" },
-        "kurtosis": { "$ref": "#/$defs/nullableNumber" }
+        "kurtosis": { "$ref": "#/$defs/nullableNumber" },
+        "ties": { "type": "integer", "minimum": 0, "description": "Anzahl der Werte, die ein bereits aufgetretenes Duplikat sind (n minus Anzahl verschiedener Werte; exakte Float-Gleichheit)." },
+        "tie_rate": { "$ref": "#/$defs/nullableNumber", "description": "ties / n; null bei n = 0." },
+        "max_tie_run": { "type": "integer", "minimum": 0, "description": "Länge des längsten Laufs gleicher Werte; der ECDF-Sprung MaxTieRun/n." }
       }
     },
     "models": {

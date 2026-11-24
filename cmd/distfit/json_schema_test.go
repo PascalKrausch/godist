@@ -58,6 +58,7 @@ func TestCLIJSONOutputMatchesSchema(t *testing.T) {
 		{"csv with column", []string{"-file=" + wineCSV, "-column=density", "-all", "-format=json"}},
 		{"txt with discarded value and no column", []string{"-file=" + txt, "-all", "-format=json"}},
 		{"with bootstrap confidence intervals", []string{"-file=" + wineCSV, "-column=density", "-include=weibull,gamma", "-all", "-format=json", "-bootstrap=10", "-bootstrap-model=all", "-bootstrap-seed=1"}},
+		{"with dip test", []string{"-file=" + wineCSV, "-column=density", "-include=weibull,gamma", "-all", "-format=json", "-dip", "-dip-simulations=100", "-dip-seed=1"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

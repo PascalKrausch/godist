@@ -12,6 +12,18 @@ evaluation/.venv/bin/python evaluation/compare.py --path=testdata/winequality-re
 
 Pfad und Spalte lassen sich anpassen. Im Virtualenv werden `scipy` und `pandas` benötigt. Das Skript baut die CLI vorab einmal (`go build`), sodass die Build-Zeit nicht in den Vergleich einfließt.
 
+## Referenztest: Hartigan-Dip-Test
+
+SciPy enthält keine Dip-Test-Implementierung. Stattdessen dient das Paket `diptest` (Python-Port der R-Referenz, Algorithmus AS 217) als Referenz für `pkg/distribution.DipStatistic`/`DipTest`.
+
+`evaluation/diptest_reference.py` erzeugt deterministische Fixtures (synthetische Verteilungen, bimodale und trimodale Mischungen, schwere Tails, Ties, kleine und große Stichproben sowie winequality-density als reale Daten) mit Dip-Statistik und per Bootstrap berechnetem p-Wert:
+
+```bash
+evaluation/.venv/bin/python evaluation/diptest_reference.py
+```
+
+Die Ausgabe `evaluation/diptest_fixtures.json` ist versioniert und wird vom Go-Test `TestDipStatisticAgainstReference` (`pkg/distribution/hartigans_dip_reference_test.go`) gelesen: Die Dip-Statistik muss auf 1e-9 genau übereinstimmen, der p-Wert innerhalb von 0.1 (beidseitig Monte-Carlo). Die Implementierung folgt der R-Referenz `src/dip.c` (AS 217 inkl. Mechler-Korrektur als Abbruch bei unverändertem modalem Intervall); die Fixtures decken u. a. n = 4–9 als Grenzfälle ab. Das Python-Paket wird nur zur Regenerierung der Fixtures benötigt, nicht für `go test`.
+
 ## Benchmarks: godist gegen SciPy
 
 `evaluation/bench.py run` misst drei Dinge und speichert die Ergebnisse unter `evaluation/bench_results/<Zeitstempel>/` (Verzeichnis ist nicht versioniert):

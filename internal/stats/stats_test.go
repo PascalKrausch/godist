@@ -114,6 +114,23 @@ func TestDescribeEdgeCases(t *testing.T) {
 	})
 }
 
+func TestDescribeCountsTies(t *testing.T) {
+	// Sortiert: 1, 1, 2, 3, 3, 3 → drei Duplikate, drei verschiedene Werte.
+	got := Describe([]float64{3, 1, 3, 2, 3, 1})
+	if got.Ties != 3 {
+		t.Errorf("Ties = %d, want 3", got.Ties)
+	}
+	assertClose(t, "TieRate", got.TieRate, 0.5)
+	if got.MaxTieRun != 3 {
+		t.Errorf("MaxTieRun = %d, want 3", got.MaxTieRun)
+	}
+
+	unique := Describe([]float64{3, 1, 2})
+	if unique.Ties != 0 || unique.TieRate != 0 {
+		t.Errorf("Ties/TieRate für eindeutige Werte = %d/%v, want 0/0", unique.Ties, unique.TieRate)
+	}
+}
+
 func TestSummaryMarshalJSONWritesInvalidValuesAsNull(t *testing.T) {
 	data, err := json.Marshal(Describe([]float64{1, 2}))
 	if err != nil {

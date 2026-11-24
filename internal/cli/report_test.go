@@ -41,7 +41,7 @@ func TestWriteTextReportWarnsForGEV(t *testing.T) {
 	}
 
 	buf.Reset()
-	WriteSummary(&buf, gev, distribution.FitMetrics{AIC: 10, BIC: 11}, "", stats.Summary{N: 10}, 0, nil)
+	WriteSummary(&buf, gev, distribution.FitMetrics{AIC: 10, BIC: 11}, "", stats.Summary{N: 10}, 0, nil, nil)
 	if !strings.Contains(buf.String(), "Extremwertverteilung") {
 		t.Error("Zusammenfassung enthält keinen GEV-Hinweis")
 	}

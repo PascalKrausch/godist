@@ -237,6 +237,10 @@ function renderDescriptive(payload) {
     ["Maximum", formatNumber(d.max)],
     ["Schiefe", formatNumber(d.skewness)],
     ["Kurtosis (Excess)", formatNumber(d.kurtosis)],
+    ["Ties (doppelte Werte)", d.ties === null || d.ties === undefined ? "–" : String(d.ties)],
+    ["Tie-Rate", formatNumber(d.tie_rate)],
+    ["Längster Tie-Run", d.max_tie_run === null || d.max_tie_run === undefined ? "–" : String(d.max_tie_run)],
+    ["Max Tie-Rate", formatNumber(d.max_tie_rate)],
   ];
 
   const body = document.querySelector("#descriptive-body");

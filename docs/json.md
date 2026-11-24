@@ -17,6 +17,7 @@ Der verbindliche Vertrag ist [`json.schema.json`](json.schema.json) (JSON Schema
 - `schema_version` ist immer vorhanden (aktuell `1`). Neue optionale Felder sind nicht-brechend; Umbenennungen oder Entfernungen erhöhen die Version.
 - `failures` ist immer vorhanden (ggf. leeres Array).
 - `models[].bootstrap` ist optional und nur vorhanden, wenn `-bootstrap > 0` für dieses Modell lief (siehe [CLI.md, Bootstrap](CLI.md#bootstrap-konfidenzintervalle)). Es enthält `method` (`nonparametric` oder `parametric`), `requested`/`replicates`/`failed` (Anzahl Wiederholungen und Ausfälle), `level` (Konfidenzniveau), `seed` (für `-bootstrap-seed`), `duration_ms`, `params` (Array aus `name`, `mean`, `lo`, `hi`) und `metrics` (`aic`, `bic`, `ks`, `rmse` als `mean`/`lo`/`hi`).
+- `dip_test` ist optional und nur vorhanden, wenn `-dip` gesetzt war. Es enthält `dip` (Dip-Statistik, 0 bis 0.25), `p_value` (Monte-Carlo-p-Wert gegen Unimodalität), `simulations` und `seed` (für `-dip-seed`). Siehe [CLI.md, Dip-Test](CLI.md#dip-test).
 - Nicht berechenbare deskriptive Kennzahlen sind `null`.
 - Ist ein Wert nicht darstellbar (NaN/Inf), gibt es keine Teilausgabe: stdout bleibt leer, Exit-Code 1.
 
@@ -32,6 +33,12 @@ Der verbindliche Vertrag ist [`json.schema.json`](json.schema.json) (JSON Schema
   "candidates": 9,
   "best_distribution": "Weibull",
   "total_duration_ms": 42.7,
+  "dip_test": {
+    "dip": 0.0312,
+    "p_value": 0.412,
+    "simulations": 2000,
+    "seed": 1
+  },
   "descriptive": {
     "n": 1000,
     "mean": 1.02,
@@ -43,7 +50,10 @@ Der verbindliche Vertrag ist [`json.schema.json`](json.schema.json) (JSON Schema
     "q3": 1.41,
     "max": 3.9,
     "skewness": 0.84,
-    "kurtosis": 0.37
+    "kurtosis": 0.37,
+    "ties": 12,
+    "tie_rate": 0.012,
+    "max_tie_run": 4
   },
   "models": [
     {
@@ -127,6 +137,13 @@ type BootstrapResult struct {
     Metrics    map[string]MetricCI   `json:"metrics"`
 }
 
+type DipTest struct {
+    Dip         float64 `json:"dip"`
+    PValue      float64 `json:"p_value"`
+    Simulations int     `json:"simulations"`
+    Seed        uint64  `json:"seed"`
+}
+
 type Failure struct {
     Name  string `json:"name"`
     Error string `json:"error"`
@@ -145,6 +162,10 @@ type Descriptive struct {
     Max      *float64 `json:"max"`
     Skewness *float64 `json:"skewness"`
     Kurtosis *float64 `json:"kurtosis"`
+    // Ties: Anzahl doppelter Werte (n minus Anzahl verschiedener Werte).
+    Ties      int      `json:"ties"`
+    TieRate   *float64 `json:"tie_rate"`
+    MaxTieRun int      `json:"max_tie_run"`
 }
 
 type FitReport struct {
@@ -156,6 +177,7 @@ type FitReport struct {
     Candidates       int         `json:"candidates"`
     BestDistribution string      `json:"best_distribution,omitempty"`
     TotalDurationMs  float64     `json:"total_duration_ms,omitempty"`
+    Dip              *DipTest    `json:"dip_test,omitempty"`
     Descriptive      Descriptive `json:"descriptive"`
     Models           []FitRow    `json:"models"`
     Failures         []Failure   `json:"failures"`
@@ -262,6 +284,16 @@ interface Descriptive {
   max: number | null;
   skewness: number | null;
   kurtosis: number | null;
+  ties: number; // Anzahl doppelter Werte
+  tie_rate: number | null; // ties / n
+  max_tie_run: number; // längster Lauf gleicher Werte (ECDF-Sprung = max_tie_run / n)
+}
+
+interface DipTest {
+  dip: number;
+  p_value: number;
+  simulations: number;
+  seed: number;
 }
 
 interface FitReport {
@@ -273,6 +305,7 @@ interface FitReport {
   candidates: number;
   best_distribution?: string;
   total_duration_ms?: number;
+  dip_test?: DipTest;
   descriptive: Descriptive;
   models: FitRow[];
   failures: Failure[];

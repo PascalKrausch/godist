@@ -13,47 +13,64 @@ import (
 // Summary enthält die deskriptiven Kennzahlen einer Stichprobe.
 // Varianz und Standardabweichung sind Stichprobenwerte (n-1). Schiefe und Kurtosis sind die
 // Stichprobenkorrigierten Werte G1 bzw. G2 (Excess-Kurtosis, Normalverteilung ergibt 0).
+// Ties ist die Anzahl der Werte, die ein bereits aufgetretenes Duplikat sind
+// (n minus Anzahl verschiedener Werte); TieRate = Ties/N. MaxTieRun ist die
+// Länge des längsten Laufs gleicher Werte — der entsprechende ECDF-Sprung
+// (MaxTieRun/N) ist der direkte Beitrag von Atomarität zum Dip-Test.
+// Geties werden über exakte Float-Gleichheit gezählt, nicht über gerundete Werte.
 // Nicht berechenbare Kennzahlen sind NaN, z. B. Varianz bei n < 2 oder Schiefe bei n < 3.
 type Summary struct {
-	N        int
-	Mean     float64
-	Median   float64
-	Variance float64
-	StdDev   float64
-	Min      float64
-	Q1       float64
-	Q3       float64
-	Max      float64
-	Skewness float64
-	Kurtosis float64
+	N          int
+	Mean       float64
+	Median     float64
+	Variance   float64
+	StdDev     float64
+	Min        float64
+	Q1         float64
+	Q3         float64
+	Max        float64
+	Skewness   float64
+	Kurtosis   float64
+	Ties       int
+	TieRate    float64
+	MaxTieRun  int
+	MaxTieRate float64
 }
 
 // MarshalJSON schreibt nicht berechenbare Kennzahlen als null, damit das JSON gültig bleibt.
 func (s Summary) MarshalJSON() ([]byte, error) {
 	return json.Marshal(struct {
-		N        int      `json:"n"`
-		Mean     *float64 `json:"mean"`
-		Median   *float64 `json:"median"`
-		Variance *float64 `json:"variance"`
-		StdDev   *float64 `json:"std_dev"`
-		Min      *float64 `json:"min"`
-		Q1       *float64 `json:"q1"`
-		Q3       *float64 `json:"q3"`
-		Max      *float64 `json:"max"`
-		Skewness *float64 `json:"skewness"`
-		Kurtosis *float64 `json:"kurtosis"`
+		N          int      `json:"n"`
+		Mean       *float64 `json:"mean"`
+		Median     *float64 `json:"median"`
+		Variance   *float64 `json:"variance"`
+		StdDev     *float64 `json:"std_dev"`
+		Min        *float64 `json:"min"`
+		Q1         *float64 `json:"q1"`
+		Q3         *float64 `json:"q3"`
+		Max        *float64 `json:"max"`
+		Skewness   *float64 `json:"skewness"`
+		Kurtosis   *float64 `json:"kurtosis"`
+		Ties       int      `json:"ties"`
+		TieRate    *float64 `json:"tie_rate"`
+		MaxTieRun  int      `json:"max_tie_run"`
+		MaxTieRate *float64 `json:"max_tie_rate"`
 	}{
-		N:        s.N,
-		Mean:     finiteOrNil(s.Mean),
-		Median:   finiteOrNil(s.Median),
-		Variance: finiteOrNil(s.Variance),
-		StdDev:   finiteOrNil(s.StdDev),
-		Min:      finiteOrNil(s.Min),
-		Q1:       finiteOrNil(s.Q1),
-		Q3:       finiteOrNil(s.Q3),
-		Max:      finiteOrNil(s.Max),
-		Skewness: finiteOrNil(s.Skewness),
-		Kurtosis: finiteOrNil(s.Kurtosis),
+		N:          s.N,
+		Mean:       finiteOrNil(s.Mean),
+		Median:     finiteOrNil(s.Median),
+		Variance:   finiteOrNil(s.Variance),
+		StdDev:     finiteOrNil(s.StdDev),
+		Min:        finiteOrNil(s.Min),
+		Q1:         finiteOrNil(s.Q1),
+		Q3:         finiteOrNil(s.Q3),
+		Max:        finiteOrNil(s.Max),
+		Skewness:   finiteOrNil(s.Skewness),
+		Kurtosis:   finiteOrNil(s.Kurtosis),
+		Ties:       s.Ties,
+		TieRate:    finiteOrNil(s.TieRate),
+		MaxTieRun:  s.MaxTieRun,
+		MaxTieRate: finiteOrNil(s.MaxTieRate),
 	})
 }
 
@@ -80,6 +97,7 @@ func Describe(values []float64) Summary {
 		Max:      nan,
 		Skewness: nan,
 		Kurtosis: nan,
+		TieRate:  nan,
 	}
 	if len(values) == 0 {
 		return s
@@ -87,6 +105,28 @@ func Describe(values []float64) Summary {
 
 	sorted := slices.Clone(values)
 	slices.Sort(sorted)
+
+	run := 1
+	for i := 1; i < len(sorted); i++ {
+		if sorted[i] == sorted[i-1] {
+			s.Ties++
+			run++
+			if run > s.MaxTieRun {
+				s.MaxTieRun = run
+			}
+		} else {
+			run = 1
+		}
+	}
+	if len(sorted) > 0 && s.MaxTieRun == 0 {
+		s.MaxTieRun = 1
+	}
+	if len(values) > 0 {
+		s.TieRate = float64(s.Ties) / float64(len(values))
+	}
+	if len(values) > 0 {
+		s.MaxTieRate = float64(s.MaxTieRun) / float64(len(values))
+	}
 
 	s.Mean = stat.Mean(values, nil)
 	s.Min = sorted[0]

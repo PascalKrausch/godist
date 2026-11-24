@@ -55,6 +55,9 @@ Verworfene Eingaben (leere Zellen, Text, `NaN`, `±Inf`, `null`) werden nicht st
 | `-bootstrap-ci` | Zahl in (0, 1) | Konfidenzniveau der Intervalle. Standard: `0.95`. Erfordert `-bootstrap`. |
 | `-bootstrap-seed` | Ganzzahl ≥ 0 | Fester Seed für reproduzierbare Läufe. `0` = zufällig; der wirksame Seed steht dann auf stderr. Erfordert `-bootstrap`. |
 | `-bootstrap-model` | `best` oder `all` | Für welche Modelle Bootstrap läuft: nur das AIC-beste (`best`, Standard) oder alle erfolgreichen Fits (`all`). Erfordert `-bootstrap`. |
+| `-dip` | – | Hartigan-Dip-Test auf die bereinigte Stichprobe (Unimodalität). Siehe unten. |
+| `-dip-simulations` | Ganzzahl ≥ 1 | Monte-Carlo-Simulationen für den p-Wert. Standard: `2000` (2000 bis 10000 empfohlen). Erfordert `-dip`. |
+| `-dip-seed` | Ganzzahl ≥ 0 | Fester Seed für reproduzierbare Läufe. Standard: `1`. Erfordert `-dip`. |
 
 Im Hilfetext (`distfit -h`) stehen dieselben Flags mit Kurzbeschreibung.
 
@@ -171,6 +174,23 @@ Gemessen auf Apple M3 (`go test -bench=Bootstrap -benchtime=1x ./pkg/distributio
 Das sind ~50 µs pro Replicate; `B = 1000` kostet also etwa 50 ms pro Modell. Der Flaschenhals ist bei teuren Fittern (L-BFGS-MLE wie GEV, StudentT, GeneralizedGamma, BurrXII) deutlich höher — dort sollte `B` kleiner gewählt oder `-bootstrap-model=best` verwendet werden. `duration_ms` im Bootstrap-Objekt bzw. die Runtime in der Textausgabe zeigt die tatsächlich verbrauchte Zeit.
 
 Praxisbeispiel (Apple M3, `winequality-red.csv`, `density`, n = 1599, `B = 200`, `-bootstrap-model=all`): alle 19 erfolgreichen Modelle in **1,3 s** Wandzeit (~8 s CPU über 8 Kerne). Pro Modell für B = 200: die meisten unter 25 ms, die L-BFGS-Fitter deutlich teurer — GEV ca. 420 ms, SkewNormal ca. 360 ms, GeneralizedGamma ca. 120 ms, StudentT ca. 60 ms. Ein Lauf mit `B = 1000` über alle Modelle liegt damit grob im einstelligen Sekundenbereich; bei `B = 10000` sollte `-bootstrap-model=best` oder eine `-include`-Einschränkung gewählt werden.
+
+## Dip-Test (Unimodalität)
+
+Mit `-dip` wird zusätzlich zu den Modellfits Hartigans Dip-Test auf die (bereinigte) Eingabestichprobe ausgeführt. Der Test prüft die Nullhypothese „die Daten stammen aus einer unimodalen Verteilung“: Die Dip-Statistik misst den maximalen Abstand zwischen empirischer Verteilungsfunktion und der bestmöglichen unimodalen Anpassung (0 bis 0.25); der p-Wert wird per Monte-Carlo-Simulation gegen die Gleichverteilung geschätzt — kleine p-Werte sprechen gegen Unimodalität (z. B. bimodale Daten). Der Test ist eine Eigenschaft der *Daten*, nicht des gewählten Modells: Er ersetzt keine Modellgütemetriken, kann aber vor der Modellwahl vor einer nicht-unimodalen Stichprobe warnen.
+
+```bash
+distfit fit werte.txt -dip
+
+# Reproduzierbarer Lauf mit mehr Simulationen
+distfit fit werte.txt -dip -dip-simulations=10000 -dip-seed=42
+```
+
+Im Textbericht erscheint ein Abschnitt „Dip test (Hartigan)“ (Dip und p-Wert samt Simulationszahl und Seed), in der JSON-Ausgabe das optionale Feld `dip_test` (siehe [JSON.md](JSON.md)). Die `-dip`-Unterflags ohne `-dip` sind ein Aufruffehler (Exit `2`), ebenso `-dip` mit `-format=plot`, weil das Dashboard das Ergebnis nicht anzeigt.
+
+Der p-Wert ist Monte-Carlo: mit `-dip-seed` ist er pro Datenstand reproduzierbar, seine Auflösung liegt bei `1/(simulationen+1)` (Standard `2000` → kleinster unterscheidbarer Wert ≈ 0,0005). Für sehr große Stichproben (`n` im sechsstelligen Bereich) kann `-dip-simulations` reduziert werden; die Statistik selbst ist auch für kleine `n` (≥ 5) definiert, verliert aber an Trennschärfe.
+
+**Nullwerte:** `-dip` läuft immer auf den rohen Werten einschließlich Nullen, unabhängig von `-zero-inflated`. Eine Punktmasse bei 0 wirkt wie eine eigene Mode und kann die Unimodalität-Hypothese allein schon verwerfen — bei Zero-inflated-Daten ist ein kleiner p-Wert daher erwartbar und kein Widerspruch zum ZI-Modell. Die Aussage „die positiven Werte sind unimodal" liefert der Test so nicht; dafür ist die Stichprobe vorher auf `> 0` zu filtern.
 
 ## Ausgabeformate
 

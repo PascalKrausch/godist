@@ -64,6 +64,9 @@ func runFitCommand(name string, args []string, allowPositional bool, stdout, std
 	bootstrapCI := fs.Float64("bootstrap-ci", 0.95, "Konfidenzniveau der Bootstrap-Intervalle in (0, 1)")
 	bootstrapSeed := fs.Uint64("bootstrap-seed", 0, "Seed für reproduzierbare Bootstrap-Läufe (0 = zufällig, wird auf stderr ausgegeben)")
 	bootstrapModel := fs.String("bootstrap-model", "best", "Für welche Modelle Bootstrap läuft: best (niedrigster AIC) oder all")
+	dip := fs.Bool("dip", false, "Hartigan-Dip-Test auf die Stichprobe (Unimodalität; p-Wert per Monte-Carlo)")
+	dipSimulations := fs.Int("dip-simulations", 2000, "Monte-Carlo-Simulationen für -dip (2000 bis 10000 empfohlen)")
+	dipSeed := fs.Uint64("dip-seed", 1, "Seed für reproduzierbare -dip-Läufe")
 
 	positional, err := parseArgs(fs, args)
 	if err != nil {
@@ -83,6 +86,9 @@ func runFitCommand(name string, args []string, allowPositional bool, stdout, std
 	}
 	if err == nil {
 		err = validateBootstrapFlags(fs, *bootstrap, bootMethod, *bootstrapCI, *bootstrapModel)
+	}
+	if err == nil {
+		err = validateDipFlags(fs, *dip, *dipSimulations, *format)
 	}
 	if err != nil {
 		fmt.Fprintf(stderr, "Fehler: %v\n\n", err)
@@ -128,10 +134,20 @@ func runFitCommand(name string, args []string, allowPositional bool, stdout, std
 		fmt.Fprintf(stderr, "Bootstrap: %d Wiederholungen (%s, %.0f%%-KI, Seed %d, Modell: %s)\n",
 			bootCfg.B, bootCfg.Method, bootCfg.Level*100, bootCfg.Seed, *bootstrapModel)
 	}
-	if *allModels {
-		return runAll(stdout, stderr, ds, filePath, *format, fitters, bootCfg, *bootstrapModel)
+	var dipReport *cli.DipReport
+	if *dip {
+		res := distribution.DipTest(ds.Values, *dipSimulations, *dipSeed)
+		dipReport = &cli.DipReport{
+			Dip:         res.Dip,
+			PValue:      res.PValue,
+			Simulations: *dipSimulations,
+			Seed:        *dipSeed,
+		}
 	}
-	return runBest(stdout, stderr, ds, fitters, bootCfg)
+	if *allModels {
+		return runAll(stdout, stderr, ds, filePath, *format, fitters, bootCfg, *bootstrapModel, dipReport)
+	}
+	return runBest(stdout, stderr, ds, fitters, bootCfg, dipReport)
 }
 
 // selectFitters übersetzt die Auswahl-Flags in Kandidaten. -distribution ist ein Sonderfall
@@ -293,6 +309,32 @@ func validateBootstrapFlags(fs *flag.FlagSet, b int, method distribution.Bootstr
 	return nil
 }
 
+// validateDipFlags prüft die Dip-Optionen. Wie bei -bootstrap sind die
+// Unteroptionen ohne -dip ein Aufruffehler; -dip ist mit -format=plot nicht
+// kombinierbar, weil das Dashboard das Ergebnis nicht anzeigt.
+func validateDipFlags(fs *flag.FlagSet, enabled bool, simulations int, format string) error {
+	if enabled {
+		if simulations < 1 {
+			return fmt.Errorf("-dip-simulations muss >= 1 sein, erhalten: %d", simulations)
+		}
+		if format == "plot" {
+			return errors.New("-dip ist mit -format=plot nicht kombinierbar (Text- oder JSON-Ausgabe verwenden)")
+		}
+		return nil
+	}
+	var stray []string
+	fs.Visit(func(f *flag.Flag) {
+		switch f.Name {
+		case "dip-simulations", "dip-seed":
+			stray = append(stray, "-"+f.Name)
+		}
+	})
+	if len(stray) > 0 {
+		return fmt.Errorf("%s erfordert -dip", strings.Join(stray, ", "))
+	}
+	return nil
+}
+
 // applyBootstrap führt die Bootstrap-Wiederholungen für die gewählten Modelle aus
 // und hängt das Ergebnis an FitResult.Bootstrap. scope "best" beschränkt auf das
 // Modell mit dem kleinsten AIC, "all" auf alle erfolgreichen Fits.
@@ -336,7 +378,7 @@ func applyBootstrap(results []distribution.FitResult, fitters []distribution.Fit
 }
 
 // runAll vergleicht alle Verteilungen und gibt den Bericht aus.
-func runAll(stdout, stderr io.Writer, ds cli.Dataset, filePath, format string, fitters []distribution.Fitter, bootCfg distribution.BootstrapConfig, bootScope string) int {
+func runAll(stdout, stderr io.Writer, ds cli.Dataset, filePath, format string, fitters []distribution.Fitter, bootCfg distribution.BootstrapConfig, bootScope string, dip *cli.DipReport) int {
 	start := time.Now()
 	results, failures, err := distribution.SelectAllModelsFromFitters(ds.Values, fitters)
 	if err != nil {
@@ -351,6 +393,7 @@ func runAll(stdout, stderr io.Writer, ds cli.Dataset, filePath, format string, f
 	}
 
 	report := cli.BuildFitReport(results, failures, filePath, ds.Column, stats.Describe(ds.Values), len(ds.Discarded))
+	report.Dip = dip
 	report.TotalDurationMs = float64(totalDuration) / float64(time.Millisecond)
 
 	if format == "json" {
@@ -395,7 +438,7 @@ func runPlot(stderr io.Writer, values []float64, results []distribution.FitResul
 }
 
 // runBest gibt nur das beste Modell aus.
-func runBest(stdout, stderr io.Writer, ds cli.Dataset, fitters []distribution.Fitter, bootCfg distribution.BootstrapConfig) int {
+func runBest(stdout, stderr io.Writer, ds cli.Dataset, fitters []distribution.Fitter, bootCfg distribution.BootstrapConfig, dip *cli.DipReport) int {
 	results, _, err := distribution.SelectAllModelsFromFitters(ds.Values, fitters)
 	if err != nil {
 		fmt.Fprintf(stderr, "Fehler: Fitting fehlgeschlagen: %v\n", err)
@@ -413,7 +456,7 @@ func runBest(stdout, stderr io.Writer, ds cli.Dataset, fitters []distribution.Fi
 	}
 	applyBootstrap(results, fitters, ds.Values, bootCfg, "best", stderr)
 	result := results[best]
-	cli.WriteSummary(stdout, result.Dist, result.Metrics, ds.Column, stats.Describe(ds.Values), len(ds.Discarded), result.Bootstrap)
+	cli.WriteSummary(stdout, result.Dist, result.Metrics, ds.Column, stats.Describe(ds.Values), len(ds.Discarded), result.Bootstrap, dip)
 	return exitOK
 }
 
@@ -438,6 +481,7 @@ func writeUsage(w io.Writer, fs *flag.FlagSet) {
 	fmt.Fprintln(w, "  distfit -file=werte.txt -all -format=plot")
 	fmt.Fprintln(w, "  distfit -file=daten.csv -column=citric -zero-inflated -all")
 	fmt.Fprintln(w, "  distfit fit werte.txt -bootstrap=1000 -bootstrap-seed=42")
+	fmt.Fprintln(w, "  distfit fit werte.txt -dip -dip-seed=42")
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Exit-Codes: 0 Erfolg, 1 Daten- oder Fitting-Fehler, 2 Aufruf-Fehler")
 }
