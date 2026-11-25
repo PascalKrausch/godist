@@ -159,6 +159,62 @@ func TestBuildPayloadExposesParamsAndMetricsWithNullForInvalid(t *testing.T) {
 	}
 }
 
+func TestBuildPayloadKDEIntegratesAndFollowsFactor(t *testing.T) {
+	// Gleichmäßig verteilte Werte auf [0, 10]: die KDE sollte eine Fläche von etwa 1
+	// über dem Datenbereich haben (kleiner als 1 auf dem gepaddeten Gitter) und positiv sein.
+	n := 500
+	sorted := make([]float64, n)
+	for i := range sorted {
+		sorted[i] = float64(i) * 10 / float64(n-1)
+	}
+
+	payload := BuildPayloadWithBins(sorted, nil, 0, 1)
+	if payload.KDE.Bandwidth == nil || payload.KDE.Silverman == nil {
+		t.Fatalf("KDE bandwidth/silverman = %v/%v, want positive values", payload.KDE.Bandwidth, payload.KDE.Silverman)
+	}
+	if len(payload.KDE.Density) != len(payload.Grid) {
+		t.Fatalf("KDE density has %d values, grid has %d", len(payload.KDE.Density), len(payload.Grid))
+	}
+	area := 0.0
+	peak := 0.0
+	for i, y := range payload.KDE.Density {
+		if y < 0 {
+			t.Fatalf("KDE density is negative at grid point %d: %g", i, y)
+		}
+		if y > peak {
+			peak = y
+		}
+		if i > 0 {
+			area += 0.5 * (y + payload.KDE.Density[i-1]) * (payload.Grid[i] - payload.Grid[i-1])
+		}
+	}
+	if area <= 0.9 || area > 1.0 {
+		t.Errorf("KDE area over grid = %g, want in (0.9, 1]", area)
+	}
+	if peak < 0.05 || peak > 0.2 {
+		t.Errorf("KDE peak = %g, want roughly the uniform density 0.1", peak)
+	}
+
+	// Ein größerer Faktor muss eine glattere (höhere, breitere) Kurve ergeben.
+	smooth := BuildPayloadWithBins(sorted, nil, 0, 3)
+	if smooth.KDE.Bandwidth == nil || smooth.KDE.Silverman == nil {
+		t.Fatalf("factor 3 KDE bandwidth/silverman = %v/%v, want positive values", smooth.KDE.Bandwidth, smooth.KDE.Silverman)
+	}
+	if want := 3 * *smooth.KDE.Silverman; *smooth.KDE.Bandwidth != want {
+		t.Errorf("factor 3 bandwidth = %v, want 3 × silverman %v", *smooth.KDE.Bandwidth, want)
+	}
+}
+
+func TestBuildPayloadKDEEmptyForConstantData(t *testing.T) {
+	payload := BuildPayload([]float64{2, 2, 2}, nil)
+	if payload.KDE.Bandwidth != nil || payload.KDE.Density != nil {
+		t.Errorf("constant data KDE = %+v, want empty", payload.KDE)
+	}
+	if _, err := json.Marshal(payload); err != nil {
+		t.Errorf("payload does not marshal to JSON: %v", err)
+	}
+}
+
 func TestBuildPayloadIncludesDescriptiveStats(t *testing.T) {
 	payload := BuildPayload([]float64{4, 1, 3, 2}, nil)
 	if payload.Descriptive.N != 4 || payload.Descriptive.Median != 2.5 || payload.Descriptive.Q1 != 1.75 || payload.Descriptive.Q3 != 3.25 {

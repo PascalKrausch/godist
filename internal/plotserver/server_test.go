@@ -2,6 +2,7 @@ package plotserver
 
 import (
 	"encoding/json"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -16,8 +17,8 @@ const testAddr = "127.0.0.1:8080"
 func newTestHandler(t *testing.T) http.Handler {
 	t.Helper()
 	models := []plot.Model{{Name: "Normal", Dist: distribution.Normal{Mu: 3, Sigma: 1}}}
-	source := func(bins int) plot.Payload {
-		return plot.BuildPayloadWithBins([]float64{1, 2, 3, 4, 5}, models, bins)
+	source := func(bins int, kdeFactor float64) plot.Payload {
+		return plot.BuildPayloadWithBins([]float64{1, 2, 3, 4, 5}, models, bins, kdeFactor)
 	}
 	handler, err := Handler(source, testAddr)
 	if err != nil {
@@ -48,6 +49,46 @@ func TestAPIPlotBinsParameter(t *testing.T) {
 	for _, raw := range []string{"0", "-3", "abc", "501"} {
 		if rec := get(handler, http.MethodGet, "/api/plot?bins="+raw, testAddr); rec.Code != http.StatusBadRequest {
 			t.Errorf("bins=%s: status = %d, want 400", raw, rec.Code)
+		}
+	}
+}
+
+func TestAPIPlotKDEParameter(t *testing.T) {
+	handler := newTestHandler(t)
+
+	var body struct {
+		KDE struct {
+			Density   []float64 `json:"density"`
+			Bandwidth *float64  `json:"bandwidth"`
+			Silverman *float64  `json:"silverman"`
+		} `json:"kde"`
+		Grid []float64 `json:"grid"`
+	}
+
+	rec := get(handler, http.MethodGet, "/api/plot?kde=2", testAddr)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("kde=2: status = %d, want 200", rec.Code)
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("response is not valid JSON: %v", err)
+	}
+	if len(body.KDE.Density) != len(body.Grid) {
+		t.Errorf("kde density has %d values, grid has %d", len(body.KDE.Density), len(body.Grid))
+	}
+	if body.KDE.Bandwidth == nil || body.KDE.Silverman == nil || *body.KDE.Silverman <= 0 {
+		t.Errorf("kde bandwidth/silverman = %v/%v, want positive values", body.KDE.Bandwidth, body.KDE.Silverman)
+	} else if want := 2 * *body.KDE.Silverman; math.Abs(*body.KDE.Bandwidth-want) > 1e-9 {
+		t.Errorf("bandwidth = %g, want 2 × silverman %g", *body.KDE.Bandwidth, want)
+	}
+
+	rec = get(handler, http.MethodGet, "/api/plot?kde=0.5", testAddr)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("kde=0.5: status = %d, want 200", rec.Code)
+	}
+
+	for _, raw := range []string{"0", "-1", "abc", "21", "NaN", "Inf"} {
+		if rec := get(handler, http.MethodGet, "/api/plot?kde="+raw, testAddr); rec.Code != http.StatusBadRequest {
+			t.Errorf("kde=%s: status = %d, want 400", raw, rec.Code)
 		}
 	}
 }
@@ -119,7 +160,7 @@ func TestPostIsNotAllowed(t *testing.T) {
 }
 
 func TestHandlerRejectsInvalidAddress(t *testing.T) {
-	if _, err := Handler(func(int) plot.Payload { return plot.Payload{} }, "no-port-here"); err == nil {
+	if _, err := Handler(func(int, float64) plot.Payload { return plot.Payload{} }, "no-port-here"); err == nil {
 		t.Error("Handler() with address without port returned no error")
 	}
 }

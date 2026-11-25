@@ -251,7 +251,7 @@ distfit -file=werte.txt -all -format=json
 
 Nur mit `-all`. Startet ein lokales Dashboard auf `127.0.0.1` mit freiem Port, öffnet es im Standardbrowser und läuft bis `Strg+C`. Die URL steht auf stderr, stdout bleibt leer. Anfragen mit einem anderen Host-Header als `127.0.0.1` oder `localhost` werden abgelehnt.
 
-Das Dashboard zeigt Histogramm, Dichte, empirische und theoretische CDF sowie Q-Q-Plots. Über Checkboxen lassen sich Modelle ein- und ausblenden. Das Feld „Klassen“ setzt die Histogrammklassen (1 bis 500); „Automatisch“ stellt die Freedman-Diaconis-Wahl wieder her. Die Daten werden dafür über `GET /api/plot?bins=N` neu berechnet.
+Das Dashboard zeigt Histogramm, KDE, Dichte, empirische und theoretische CDF sowie Q-Q-Plots. Über Checkboxen lassen sich Modelle ein- und ausblenden. Das Feld „Klassen“ setzt die Histogrammklassen (1 bis 500); „Automatisch“ stellt die Freedman-Diaconis-Wahl wieder her. Das Feld „Glättung (× Silverman)“ setzt den KDE-Glättungsfaktor; ein leerer Wert bzw. „Automatisch“ stellt die Silverman-Bandbreite wieder her. Die Daten werden dafür über `GET /api/plot?bins=N&kde=F` neu berechnet.
 
 ## Beispiele
 

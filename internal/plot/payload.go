@@ -57,6 +57,17 @@ type Histogram struct {
 	GridDensity []float64 `json:"grid_density"`
 }
 
+// KDE enthält die kernelbasierte Dichteschätzung auf demselben Raster wie Grid.
+// nil, wenn keine positive Bandbreite berechenbar ist (z. B. konstante Daten).
+type KDE struct {
+	// Density ist parallel zu Payload.Grid.
+	Density []float64 `json:"density"`
+	// Bandwidth ist die verwendete Bandbreite h.
+	Bandwidth *float64 `json:"bandwidth"`
+	// Silverman ist die Silverman-Referenzbandbreite; Bandwidth = Faktor × Silverman.
+	Silverman *float64 `json:"silverman"`
+}
+
 // ModelPlot enthält die Kurven eines Modells auf dem gemeinsamen Raster.
 // Ungültige Werte (NaN, Inf) sind null, damit die Ausgabe gültiges JSON bleibt.
 type ModelPlot struct {
@@ -76,6 +87,7 @@ type Payload struct {
 	Descriptive stats.Summary `json:"descriptive"`
 	Grid        []float64     `json:"grid"`
 	Histogram   Histogram     `json:"histogram"`
+	KDE         KDE           `json:"kde"`
 	ECDF        []float64     `json:"ecdf"`
 	Models      []ModelPlot   `json:"models"`
 }
@@ -83,15 +95,16 @@ type Payload struct {
 // MaxBins ist die größte zulässige Klassenanzahl des Histogramms.
 const MaxBins = maxBins
 
-// BuildPayload erstellt alle Diagrammdaten mit automatischer Klassenanzahl.
+// BuildPayload erstellt alle Diagrammdaten mit automatischer Klassenanzahl und Silverman-Bandbreite.
 // Die Werte müssen bereits bereinigt sein (endlich, im Träger der Modelle).
 func BuildPayload(values []float64, models []Model) Payload {
-	return BuildPayloadWithBins(values, models, 0)
+	return BuildPayloadWithBins(values, models, 0, 0)
 }
 
-// BuildPayloadWithBins wie BuildPayload, mit fester Klassenanzahl. bins <= 0 wählt die Anzahl automatisch,
-// größere Werte als MaxBins werden begrenzt.
-func BuildPayloadWithBins(values []float64, models []Model, bins int) Payload {
+// BuildPayloadWithBins wie BuildPayload, mit fester Klassenanzahl und KDE-Glättungsfaktor.
+// bins <= 0 wählt die Anzahl automatisch, größere Werte als MaxBins werden begrenzt.
+// kdeFactor <= 0 oder nicht endlich bedeutet Silverman-Standard (Faktor 1), sonst h = kdeFactor × Silverman.
+func BuildPayloadWithBins(values []float64, models []Model, bins int, kdeFactor float64) Payload {
 	sorted := append([]float64(nil), values...)
 	sort.Float64s(sorted)
 
@@ -110,6 +123,7 @@ func BuildPayloadWithBins(values []float64, models []Model, bins int) Payload {
 	payload.Grid = buildGrid(sorted, payload.Histogram.Edges)
 	payload.ECDF = ecdfOnGrid(sorted, payload.Grid)
 	payload.Histogram.GridDensity = histogramOnGrid(payload.Histogram, payload.Grid)
+	payload.KDE = newKDE(sorted, payload.Grid, payload.Descriptive.StdDev, kdeFactor)
 
 	for _, m := range models {
 		payload.Models = append(payload.Models, ModelPlot{
@@ -290,6 +304,69 @@ func newMetrics(m distribution.FitMetrics) Metrics {
 		RMSE:       finiteOrNil(m.RMSE),
 		DurationMs: durationMs,
 	}
+}
+
+// newKDE schätzt die empirische Dichte mit einem Gauss-Kernel auf dem Raster.
+// Die Bandbreite ist faktor × Silverman-Bandbreite; faktor <= 0 oder nicht endlich bedeutet Faktor 1.
+// Ohne positive Bandbreite (z. B. konstante Daten) ist das Ergebnis leer.
+func newKDE(sorted, grid []float64, stdDev, factor float64) KDE {
+	silverman := silvermanBandwidth(sorted, stdDev)
+	if silverman <= 0 {
+		return KDE{}
+	}
+	if factor <= 0 || math.IsNaN(factor) || math.IsInf(factor, 0) {
+		factor = 1
+	}
+	bandwidth := factor * silverman
+	density := kdeOnGrid(sorted, grid, bandwidth)
+	if density == nil {
+		return KDE{}
+	}
+	return KDE{
+		Density:   density,
+		Bandwidth: &bandwidth,
+		Silverman: &silverman,
+	}
+}
+
+// silvermanBandwidth berechnet die Silverman-Regel
+// h = 0,9 · min(σ, IQR/1,349) · n^(−1/5). Gibt 0 zurück, wenn h nicht positiv ist.
+func silvermanBandwidth(sorted []float64, stdDev float64) float64 {
+	n := len(sorted)
+	if n < 2 || stdDev <= 0 || math.IsNaN(stdDev) || math.IsInf(stdDev, 0) {
+		return 0
+	}
+	sigma := stdDev
+	if iqr := quantileSorted(sorted, 0.75) - quantileSorted(sorted, 0.25); iqr > 0 {
+		if s := iqr / 1.349; s < sigma {
+			sigma = s
+		}
+	}
+	return 0.9 * sigma * math.Pow(float64(n), -0.2)
+}
+
+// kdeOnGrid wertet die Gauss-Kernel-Dichteschätzung auf dem Raster aus.
+// Sortierte Daten erlauben ein Fenster von ±3h um jeden Gitterpunkt; der verworfene
+// Kernel-Anteil liegt unter 0,3 %. h <= 0 ergibt nil.
+func kdeOnGrid(sorted, grid []float64, h float64) []float64 {
+	if h <= 0 || len(sorted) == 0 {
+		return nil
+	}
+	n := float64(len(sorted))
+	out := make([]float64, len(grid))
+	norm := 1 / (n * h * math.Sqrt(2*math.Pi))
+	reach := 3 * h
+	for i, x := range grid {
+		lo := sort.Search(len(sorted), func(k int) bool { return sorted[k] >= x-reach })
+		hi := sort.Search(len(sorted), func(k int) bool { return sorted[k] > x+reach })
+		sum := 0.0
+		for k := lo; k < hi; k++ {
+			d := (x - sorted[k]) / h
+			sum += math.Exp(-0.5 * d * d)
+		}
+		out[i] = norm * sum
+	}
+	return out
 }
 
 // histogramRange liefert den Datenbereich; bei konstanten Daten wird er künstlich um ±0.5 erweitert.

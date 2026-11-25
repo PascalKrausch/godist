@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net"
 	"net/http"
 	"strconv"
@@ -12,13 +13,18 @@ import (
 	"github.com/PascalKrausch/godist/internal/plot"
 )
 
-// Source liefert die Diagrammdaten für eine Klassenanzahl. bins = 0 bedeutet automatische Wahl.
-type Source func(bins int) plot.Payload
+// Source liefert die Diagrammdaten für eine Klassenanzahl und einen KDE-Glättungsfaktor.
+// bins = 0 und kdeFactor <= 0 bedeuten automatische Wahl (Freedman-Diaconis bzw. Silverman).
+type Source func(bins int, kdeFactor float64) plot.Payload
+
+// maxKDEFactor begrenzt den KDE-Glättungsfaktor, damit extreme Werte die Bandbreite nicht unbrauchbar machen.
+const maxKDEFactor = 20.0
 
 // Handler liefert das Dashboard und die JSON-API. addr ist die Adresse, auf der der Server lauscht
 // (z. B. "127.0.0.1:8080"). Nur Anfragen mit genau diesem Host werden beantwortet; das verhindert
 // DNS-Rebinding-Zugriffe von fremden Webseiten auf die lokalen Daten.
-// GET /api/plot?bins=N berechnet die Daten mit N Klassen; ohne Parameter wird die Klassenanzahl automatisch gewählt.
+// GET /api/plot?bins=N&kde=F berechnet die Daten mit N Klassen und KDE-Glättung Faktor × Silverman;
+// ohne Parameter werden Klassenanzahl und Bandbreite automatisch gewählt.
 func Handler(source Source, addr string) (http.Handler, error) {
 	assets, err := webAssets()
 	if err != nil {
@@ -37,11 +43,16 @@ func Handler(source Source, addr string) (http.Handler, error) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+		kdeFactor, err := parseKDEFactor(r.URL.Query().Get("kde"))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.Header().Set("Cache-Control", "no-store")
 
-		if err := json.NewEncoder(w).Encode(source(bins)); err != nil {
+		if err := json.NewEncoder(w).Encode(source(bins, kdeFactor)); err != nil {
 			// Die Antwort könnte bereits teilweise geschrieben sein.
 			// Nicht versuchen, danach noch eine zweite JSON-Antwort zu senden.
 			return
@@ -67,6 +78,19 @@ func parseBins(raw string) (int, error) {
 		return 0, fmt.Errorf("bins muss eine ganze Zahl zwischen 1 und %d sein", plot.MaxBins)
 	}
 	return bins, nil
+}
+
+// parseKDEFactor liest den Query-Parameter kde als Glättungsfaktor relativ zur Silverman-Bandbreite.
+// Leer bedeutet automatisch (0); der Faktor muss endlich und positiv sein.
+func parseKDEFactor(raw string) (float64, error) {
+	if raw == "" {
+		return 0, nil
+	}
+	factor, err := strconv.ParseFloat(raw, 64)
+	if err != nil || math.IsNaN(factor) || math.IsInf(factor, 0) || factor <= 0 || factor > maxKDEFactor {
+		return 0, fmt.Errorf("kde muss eine endliche Zahl zwischen 0 und %g sein", maxKDEFactor)
+	}
+	return factor, nil
 }
 
 func rejectForeignHosts(allowedHosts map[string]bool, next http.Handler) http.Handler {

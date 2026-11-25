@@ -1,5 +1,9 @@
-async function loadPayload(bins) {
-  const url = bins ? `/api/plot?bins=${bins}` : "/api/plot";
+async function loadPayload(bins, kde) {
+  const params = new URLSearchParams();
+  if (bins) params.set("bins", bins);
+  if (kde) params.set("kde", kde);
+  const query = params.toString();
+  const url = query ? `/api/plot?${query}` : "/api/plot";
   const response = await fetch(url);
 
   if (!response.ok) {
@@ -11,6 +15,9 @@ async function loadPayload(bins) {
 
 // Obergrenze der Klassenanzahl, identisch mit plot.MaxBins im Backend.
 const MAX_BINS = 500;
+
+// Obergrenze des KDE-Glättungsfaktors, identisch mit plotserver.maxKDEFactor im Backend.
+const MAX_KDE_FACTOR = 20;
 
 // uPlot zeichnet ohne explizite Farbe nichts sichtbar, daher gibt es eine feste Palette.
 const PALETTE = ["#d62728", "#1f77b4", "#2ca02c", "#9467bd", "#ff7f0e", "#8c564b", "#e377c2"];
@@ -24,6 +31,8 @@ const state = {
   descriptiveBuilt: false,
   hidden: new Set(),
   togglesBuilt: false,
+  bins: null,
+  kde: null,
 };
 
 function seriesOptions(curve, color) {
@@ -98,6 +107,13 @@ function pdfCurves(payload) {
       color: "#4682b4",
       stepped: true,
       fill: "rgba(70, 130, 180, 0.35)",
+    },
+    {
+      name: "KDE",
+      // null-Dichte (z. B. konstante Daten) wird als Lücke gezeichnet.
+      y: payload.kde.density || new Array(payload.grid.length).fill(null),
+      color: "#7f7f7f",
+      dash: [6, 4],
     },
     ...payload.models.map(model => ({ name: model.name, y: model.pdf })),
   ];
@@ -280,13 +296,35 @@ function renderBinsControls(payload, bins) {
     : "automatisch (Freedman-Diaconis)";
 }
 
+// Das KDE-Eingabefeld zeigt den Glättungsfaktor; leer bedeutet Silverman-Standard.
+// Die Info zeigt die tatsächlich verwendete Bandbreite h und deren Silverman-Referenz.
+function renderKDEControls(payload, kde) {
+  const input = document.querySelector("#kde-input");
+  const info = document.querySelector("#kde-info");
+  input.value = kde || "";
+
+  if (payload.kde.bandwidth === null || payload.kde.bandwidth === undefined) {
+    info.textContent = "nicht verfügbar";
+    return;
+  }
+  const factor = payload.kde.silverman > 0
+    ? payload.kde.bandwidth / payload.kde.silverman
+    : null;
+  info.textContent = `h = ${formatNumber(payload.kde.bandwidth)}` +
+    (factor === null ? "" : ` · Faktor ${factor.toPrecision(3)}`) +
+    (kde ? "" : " (Silverman)");
+}
+
 let latestRequest = 0;
 
-async function update(bins) {
+async function update(bins, kde) {
   // Nur die jeweils neueste Anfrage darf das Dashboard aktualisieren.
   const request = ++latestRequest;
-  const payload = await loadPayload(bins);
+  const payload = await loadPayload(bins, kde);
   if (request !== latestRequest) return;
+
+  state.bins = bins;
+  state.kde = kde;
 
   document.querySelector("#sample-size").textContent = `n = ${payload.sample_size}`;
 
@@ -302,6 +340,7 @@ async function update(bins) {
   renderCDF(payload);
   renderQQ(payload);
   renderBinsControls(payload, bins);
+  renderKDEControls(payload, kde);
 }
 
 function reportError(error) {
@@ -311,6 +350,7 @@ function reportError(error) {
 
 async function main() {
   const binsInput = document.querySelector("#bins-input");
+  const kdeInput = document.querySelector("#kde-input");
 
   binsInput.addEventListener("change", () => {
     const bins = Number(binsInput.value);
@@ -320,16 +360,38 @@ async function main() {
       return;
     }
     document.querySelector("#error").textContent = "";
-    update(bins).catch(reportError);
+    update(bins, state.kde).catch(reportError);
   });
 
   document.querySelector("#bins-auto").addEventListener("click", () => {
     document.querySelector("#error").textContent = "";
-    update(null).catch(reportError);
+    update(null, state.kde).catch(reportError);
+  });
+
+  kdeInput.addEventListener("change", () => {
+    const raw = kdeInput.value.trim();
+    if (raw === "") {
+      document.querySelector("#error").textContent = "";
+      update(state.bins, null).catch(reportError);
+      return;
+    }
+    const kde = Number(raw);
+    if (!Number.isFinite(kde) || kde <= 0 || kde > MAX_KDE_FACTOR) {
+      document.querySelector("#error").textContent =
+        `Der KDE-Glättungsfaktor muss zwischen 0 und ${MAX_KDE_FACTOR} liegen.`;
+      return;
+    }
+    document.querySelector("#error").textContent = "";
+    update(state.bins, kde).catch(reportError);
+  });
+
+  document.querySelector("#kde-auto").addEventListener("click", () => {
+    document.querySelector("#error").textContent = "";
+    update(state.bins, null).catch(reportError);
   });
 
   try {
-    await update(null);
+    await update(null, null);
   } catch (error) {
     reportError(error);
   }

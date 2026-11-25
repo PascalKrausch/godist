@@ -94,9 +94,10 @@ func TestDipTest(t *testing.T) {
 		clean := sampleBimodalNormal(rng, 120)
 		dirty := make([]float64, 0, len(clean)+4)
 		for i, v := range clean {
-			if i%30 == 0 {
+			switch i % 30 {
+			case 0:
 				dirty = append(dirty, math.NaN())
-			} else if i%30 == 15 {
+			case 15:
 				dirty = append(dirty, math.Inf(1))
 			}
 			dirty = append(dirty, v)

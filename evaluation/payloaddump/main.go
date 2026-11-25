@@ -20,6 +20,7 @@ func main() {
 	filePath := flag.String("file", "", "Pfad zur Datei")
 	column := flag.String("column", "", "CSV: Spaltenname oder 0-basierter Index")
 	bins := flag.Int("bins", 0, "Klassenanzahl (0 = automatisch)")
+	kde := flag.Float64("kde", 0, "KDE-Glättungsfaktor (0 = automatisch)")
 	flag.Parse()
 
 	if *filePath == "" {
@@ -39,7 +40,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	payload := cli.BuildPlotSource(ds.Values, results)(*bins)
+	payload := cli.BuildPlotSource(ds.Values, results)(*bins, *kde)
 	if err := json.NewEncoder(os.Stdout).Encode(payload); err != nil {
 		fmt.Fprintf(os.Stderr, "Fehler: %v\n", err)
 		os.Exit(1)

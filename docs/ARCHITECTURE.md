@@ -52,9 +52,9 @@ type Fitter interface {
 
 ## Plot-Schicht
 
-- `internal/plot` berechnet die Diagrammdaten (`BuildPayloadWithBins`): Histogramm, ECDF, PDF- und CDF-Kurven der Modelle auf einem gemeinsamen Raster sowie Q-Q-Punkte. Die Darstellung findet dort nicht statt. Die deskriptiven Kennzahlen kommen aus `internal/stats` (`Describe`) und stehen im Feld `descriptive`.
+- `internal/plot` berechnet die Diagrammdaten (`BuildPayloadWithBins`): Histogramm, KDE (Gauss-Kernel mit Silverman-Bandbreite, skaliert über einen Faktor), ECDF, PDF- und CDF-Kurven der Modelle auf einem gemeinsamen Raster sowie Q-Q-Punkte. Die Darstellung findet dort nicht statt. Die deskriptiven Kennzahlen kommen aus `internal/stats` (`Describe`) und stehen im Feld `descriptive`.
 - `internal/plotserver` bettet das Frontend (`internal/plotserver/web/`, uPlot) per `go:embed` ein und liefert es zusammen mit der JSON-API aus. Anfragen mit fremdem Host-Header werden abgelehnt.
 - Die Datenquelle wird pro Anfrage aufgerufen (`plotserver.Source`), damit die Klassenanzahl im Browser geändert werden kann, ohne den Server neu zu starten.
 
-API: `GET /api/plot` liefert das Payload als JSON. Der optionale Parameter `bins` (1 bis 500) setzt die Klassenanzahl des Histogramms; ohne Parameter wird sie nach Freedman-Diaconis gewählt. Ungültige Werte liefern `400 Bad Request`.
+API: `GET /api/plot` liefert das Payload als JSON. Der optionale Parameter `bins` (1 bis 500) setzt die Klassenanzahl des Histogramms; ohne Parameter wird sie nach Freedman-Diaconis gewählt. Der optionale Parameter `kde` (0 < F ≤ 20) setzt den KDE-Glättungsfaktor relativ zur Silverman-Bandbreite; ohne Parameter gilt Faktor 1. Ungültige Werte liefern `400 Bad Request`.
 
