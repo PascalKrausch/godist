@@ -57,7 +57,7 @@ Die Verteilungen mit positivem Träger behandeln Nullwerte derzeit **streng**: E
 - **ChiSquare:** Der Träger ist [0, ∞). Nullwerte liegen für k > 0 am Rand des Trägers und werden wie bei Gamma abgelehnt (Fast-Fail).
 - **Exponential:** behält Nullwerte; die Dichte an der Stelle 0 ist endlich, der Kandidat ist also nicht betroffen.
 - **Normal, SkewNormal, Gumbel, GEV, Laplace, Logistic:** behalten Nullwerte (`CleanDataWithZero`) und sind von dieser Regel nicht betroffen.
-- **Beta:** Der Träger wird aus den Daten abgeleitet ( Ob Nullwerte scheitern, entscheidet die Dichteprüfung.
+- **Beta:** Der Träger wird aus den Daten abgeleitet ( Ob Nullwerte scheitern, entscheidet die Dichteprüfung. `min`/`max` werden per ML geschätzt und zählen als freie Parameter (α, β ≥ 1); bei entarteten Grenzfällen (β, Grenzen → ∞, entsprechend Gamma-Grenzverteilungen) scheitert der Kandidat.
 
 **Negative Werte** werden ebenfalls über die Trägerprüfung behandelt: Exponential, Gamma, Weibull, LogNormal, LogLogistic, BurrXII, Rayleigh, Pareto, ChiSquare und GeneralizedGamma lehnen jeden negativen Wert mit `ErrNegativeValues` ab. Normal, SkewNormal, Gumbel, GEV, Laplace, Cauchy und StudentT sowie Beta (Träger aus den Daten) verarbeiten negative Werte. Alle Kandidaten werten so dieselbe Stichprobe aus.
 

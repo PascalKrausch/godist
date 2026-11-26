@@ -62,7 +62,7 @@ func Catalog() []Spec {
 			Description: "Beta-Verteilung auf einem endlichen Intervall",
 			Params:      []string{"alpha", "beta", "min", "max"},
 			Support:     "[min, max] (aus den Daten)",
-			FitNotes:    "Grenzen min und max werden aus den Daten bestimmt; Momentenmethode",
+			FitNotes:    "Grenzen min und max werden per ML aus den Daten geschätzt (4 Parameter, α, β ≥ 1); für Daten mit bekannter endlicher Trägergrenze BetaFitter mit expliziten Min/Max verwenden",
 			Fitter:      BetaFitter{},
 		},
 		{

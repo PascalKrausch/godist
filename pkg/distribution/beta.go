@@ -17,6 +17,10 @@ type Beta struct {
 	Beta  float64 // Formparameter (β > 0)
 	Min   float64 // Untere Intervallgrenze
 	Max   float64 // Obere Intervallgrenze
+	// boundsEstimated markiert, dass Min/Max per ML aus den Daten geschätzt
+	// wurden (BetaFitter ohne vorgegebene Grenzen). Dann zählen sie als
+	// freie Parameter für AIC/BIC.
+	boundsEstimated bool
 }
 
 func (b Beta) Quantile(p float64) float64 {
@@ -43,8 +47,12 @@ func (b Beta) ParamNames() []string {
 	return []string{"alpha", "beta", "min", "max"}
 }
 
-// freeParamCount: Min und Max sind fest (vorgegeben oder aus den Daten bestimmt) und werden nicht geschätzt.
+// freeParamCount: Min und Max zählen nur, wenn sie per ML aus den Daten
+// geschätzt wurden (boundsEstimated); vorgegebene Grenzen sind fix.
 func (b Beta) freeParamCount() int {
+	if b.boundsEstimated {
+		return 4
+	}
 	return 2
 }
 
@@ -115,25 +123,12 @@ func (f BetaFitter) Fit(data []float64) (ContinuousDistribution, error) {
 	minVal := f.Min
 	maxVal := f.Max
 
-	// Grenzen automatisch bestimmen, falls nicht vorgegeben
+	// Grenzen automatisch bestimmen, falls nicht vorgegeben: Min/Max werden
+	// dann als freie ML-Parameter mit α, β ≥ 1 geschätzt (siehe
+	// fitBetaAutoBounds). Eine feste Boundary-Dichte verhindert die
+	// unbegrenzte Likelihood klassischer Stützpunktschätzung.
 	if minVal == 0 && maxVal == 0 {
-		// Berechne Min/Max direkt ohne Summarize (spart 1 Allokation)
-		dataMin := cleaned[0]
-		dataMax := cleaned[0]
-		for _, v := range cleaned {
-			if v < dataMin {
-				dataMin = v
-			}
-			if v > dataMax {
-				dataMax = v
-			}
-		}
-		margin := 0.01 * (dataMax - dataMin)
-		if margin == 0 {
-			margin = 0.001
-		}
-		minVal = dataMin - margin
-		maxVal = dataMax + margin
+		return fitBetaAutoBounds(cleaned)
 	}
 
 	// Daten auf [0, 1] skalieren und Log-Summen für MLE berechnen
@@ -368,4 +363,262 @@ func fitBetaMLE(
 	}
 
 	return alpha, betaParam, nil
+}
+
+// betaAutoPoint hält die aus z abgeleiteten Modellparameter samt
+// Hilfsgrößen für die ML-Optimierung der Beta mit geschätzten Grenzen.
+type betaAutoPoint struct {
+	alpha, betaP float64
+	min, max     float64
+	rangeVal     float64
+	s1, s2       float64 // Σ ln y, Σ ln(1−y)
+	t1, t3       float64 // Σ 1/y, Σ y/(1−y)
+	nll          float64
+	ok           bool
+}
+
+// evalBetaAuto wertet Negative-Log-Likelihood und partielle Ableitungen
+// nach (alpha, beta, min, max) an der Stelle z aus.
+//
+// Parametrisierung (alle Parameter > 0 per Konstruktion):
+//
+//	alpha = 1 + exp(z0),  beta = 1 + exp(z1)   (Dichte am Rand endlich)
+//	min   = dataMin − exp(z2), max = dataMax + exp(z3)  (Träger enthält Daten strikt)
+//
+// Mit α, β ≥ 1 geht die Dichte an den Rändern gegen 0 (bzw. ist endlich
+// für α = β = 1), sodass die Likelihood im Randabstand nach oben
+// beschränkt ist — die Divergenz der Stützpunktschätzung ist ausgeschlossen.
+func evalBetaAuto(z []float64, data []float64, dataMin, dataMax float64) betaAutoPoint {
+	var p betaAutoPoint
+	if len(z) != 4 {
+		return p
+	}
+
+	p.alpha = 1 + math.Exp(z[0])
+	p.betaP = 1 + math.Exp(z[1])
+	p.min = dataMin - math.Exp(z[2])
+	p.max = dataMax + math.Exp(z[3])
+	p.rangeVal = p.max - p.min
+
+	if !IsFinite(p.alpha) || !IsFinite(p.betaP) ||
+		!IsFinite(p.min) || !IsFinite(p.max) ||
+		p.rangeVal <= 0 || !IsFinite(p.rangeVal) {
+		return p
+	}
+
+	n := float64(len(data))
+	for _, x := range data {
+		y := (x - p.min) / p.rangeVal
+		if y <= 0 || y >= 1 {
+			return betaAutoPoint{}
+		}
+		p.s1 += math.Log(y)
+		p.s2 += math.Log1p(-y)
+		p.t1 += 1 / y
+		p.t3 += y / (1 - y)
+	}
+	if !IsFinite(p.s1) || !IsFinite(p.s2) ||
+		!IsFinite(p.t1) || !IsFinite(p.t3) {
+		return betaAutoPoint{}
+	}
+
+	// n·Lbeta(α,β) − (α−1)·Σln y − (β−1)·Σln(1−y) + n·ln(max−min)
+	p.nll = n*mathext.Lbeta(p.alpha, p.betaP) -
+		(p.alpha-1)*p.s1 -
+		(p.betaP-1)*p.s2 +
+		n*math.Log(p.rangeVal)
+
+	p.ok = IsFinite(p.nll)
+	return p
+}
+
+// fitBetaAutoBounds schätzt Alpha, Beta, Min und Max gemeinsam per
+// Maximum-Likelihood. Aufgerufen, wenn BetaFitter keine Grenzen vorgibt.
+func fitBetaAutoBounds(data []float64) (ContinuousDistribution, error) {
+	dataMin := data[0]
+	dataMax := data[0]
+	for _, v := range data {
+		if v < dataMin {
+			dataMin = v
+		}
+		if v > dataMax {
+			dataMax = v
+		}
+	}
+	dataRange := dataMax - dataMin
+	if !(dataRange > 0) || !IsFinite(dataRange) {
+		return nil, errors.New("daten haben keine Variation für Beta-Fit")
+	}
+
+	// Startgrenzen: kleiner Rand um die Daten (wie bisherige Heuristik,
+	// der ML optimiert sie anschließend als freie Parameter).
+	margin0 := 0.01 * dataRange
+	startMin := dataMin - margin0
+	startMax := dataMax + margin0
+
+	// Startwerte α, β aus der Momentenmethode auf [0, 1].
+	// α, β müssen > 1 sein (Parametrisierung α = 1 + exp(z)); Werte
+	// unter 1 werden auf 1.05 gekappt.
+	mean := stat.Mean(data, nil)
+	variance := stat.Variance(data, nil)
+	scaledMean := (mean - startMin) / (startMax - startMin)
+	scaledVariance := variance / ((startMax - startMin) * (startMax - startMin))
+
+	alpha0, beta0 := 2.0, 2.0
+	if scaledVariance > 0 && scaledVariance < scaledMean*(1.0-scaledMean) {
+		commonFactor := (scaledMean*(1.0-scaledMean)/scaledVariance - 1.0)
+		a := scaledMean * commonFactor
+		b := (1.0 - scaledMean) * commonFactor
+		if a > 1.05 && IsFinite(a) {
+			alpha0 = a
+		}
+		if b > 1.05 && IsFinite(b) {
+			beta0 = b
+		}
+	}
+
+	// z = [ln(α−1), ln(β−1), ln(dataMin−min), ln(max−dataMax)]
+	initial := []float64{
+		math.Log(alpha0 - 1),
+		math.Log(beta0 - 1),
+		math.Log(margin0),
+		math.Log(margin0),
+	}
+
+	bestZ := []float64{math.NaN(), math.NaN(), math.NaN(), math.NaN()}
+	bestF := math.Inf(1)
+
+	// Func und Grad werden pro Iteration meist an derselben Stelle
+	// ausgewertet; die O(n)-Auswertung wird daher für gleiche z gekappt.
+	var lastZ [4]float64
+	var lastP betaAutoPoint
+	var cached bool
+	eval := func(z []float64) betaAutoPoint {
+		if cached && len(z) == 4 &&
+			z[0] == lastZ[0] && z[1] == lastZ[1] &&
+			z[2] == lastZ[2] && z[3] == lastZ[3] {
+			return lastP
+		}
+		p := evalBetaAuto(z, data, dataMin, dataMax)
+		if len(z) == 4 {
+			copy(lastZ[:], z)
+			lastP = p
+			cached = true
+		}
+		return p
+	}
+
+	problem := optimize.Problem{
+		Func: func(z []float64) float64 {
+			p := eval(z)
+			if !p.ok {
+				return math.Inf(1)
+			}
+			if p.nll < bestF {
+				bestF = p.nll
+				copy(bestZ, z)
+			}
+			return p.nll
+		},
+		Grad: func(grad, z []float64) {
+			p := eval(z)
+			if !p.ok {
+				for i := range grad {
+					grad[i] = math.Inf(1)
+				}
+				return
+			}
+
+			n := float64(len(data))
+			sum := p.alpha + p.betaP
+
+			// Partielle nach (alpha, beta, min, max):
+			// dNLL/dα = n·(ψ(α)−ψ(α+β)) − S1
+			// dNLL/dβ = n·(ψ(β)−ψ(α+β)) − S2
+			// dNLL/dm = [−(α−1)(n−T1) − (β−1)n − n] / L
+			// dNLL/dM = [(α−1)n − (β−1)T3 + n] / L
+			dAlpha := n*(mathext.Digamma(p.alpha)-mathext.Digamma(sum)) - p.s1
+			dBeta := n*(mathext.Digamma(p.betaP)-mathext.Digamma(sum)) - p.s2
+			dMin := (-(p.alpha-1)*(n-p.t1) - (p.betaP-1)*n - n) / p.rangeVal
+			dMax := ((p.alpha-1)*n - (p.betaP-1)*p.t3 + n) / p.rangeVal
+
+			// Kettenregel auf z:
+			// dα/dz0 = α−1, dβ/dz1 = β−1,
+			// dm/dz2 = −exp(z2) = min−dataMin, dM/dz3 = exp(z3) = max−dataMax
+			grad[0] = dAlpha * (p.alpha - 1)
+			grad[1] = dBeta * (p.betaP - 1)
+			grad[2] = dMin * (p.min - dataMin)
+			grad[3] = dMax * (p.max - dataMax)
+
+			for i := range grad {
+				if !IsFinite(grad[i]) {
+					grad[i] = math.Inf(1)
+				}
+			}
+		},
+	}
+
+	settings := &optimize.Settings{
+		GradientThreshold: 1e-8,
+		MajorIterations:   1000,
+		FuncEvaluations:   10000,
+		GradEvaluations:   10000,
+	}
+
+	result, err := optimize.Minimize(problem, initial, settings, &optimize.LBFGS{})
+
+	var x []float64
+	if err != nil {
+		if (!errors.Is(err, optimize.ErrNoProgress) &&
+			!errors.Is(err, optimize.ErrLinesearcherFailure)) ||
+			math.IsNaN(bestZ[0]) {
+			return nil, fmt.Errorf("Beta-MLE-Optimierung fehlgeschlagen: %w", err)
+		}
+
+		// Wie bei fitBetaMLE: besten gesehehen Punkt nur akzeptieren,
+		// wenn der Gradient pro Beobachtung klein ist. Gradient im
+		// z-Raum wie in problem.Grad.
+		p := evalBetaAuto(bestZ, data, dataMin, dataMax)
+		if !p.ok {
+			return nil, fmt.Errorf("Beta-MLE-Optimierung fehlgeschlagen: %w", err)
+		}
+		n := float64(len(data))
+		sum := p.alpha + p.betaP
+		g0 := (n*(mathext.Digamma(p.alpha)-mathext.Digamma(sum)) - p.s1) * (p.alpha - 1)
+		g1 := (n*(mathext.Digamma(p.betaP)-mathext.Digamma(sum)) - p.s2) * (p.betaP - 1)
+		maxGrad := math.Max(math.Abs(g0), math.Abs(g1))
+		if !IsFinite(maxGrad) || maxGrad/n > 1e-6 {
+			return nil, fmt.Errorf("Beta-MLE-Optimierung fehlgeschlagen: %w", err)
+		}
+		x = bestZ
+	} else {
+		if result.Status.Early() {
+			return nil, fmt.Errorf("Beta-MLE nicht konvergiert: %s", result.Status)
+		}
+		x = result.X
+	}
+
+	p := evalBetaAuto(x, data, dataMin, dataMax)
+	if !p.ok {
+		return nil, errors.New("Beta-MLE lieferte ungültige Parameter")
+	}
+
+	// Degenerationsguard: Der Parameterraum ist nicht kompakt. Läuft die
+	// Optimierung in den Grenzfall α, β → ∞ mit entsprechend unendlichen
+	// Grenzen, konvergiert die Beta gegen eine andere Familie (z. B.
+	// Gamma mit verschobenem Nullpunkt), die bereits eigener Kandidat
+	// ist. Ein endlicher Fit wird daher abgelehnt.
+	if p.alpha > 1e4 || p.betaP > 1e4 || p.rangeVal > 1e3*dataRange {
+		return nil, errors.New(
+			"beta-grenzen laufen in einen entarteten grenzfall (gamma-ähnlich)",
+		)
+	}
+
+	return Beta{
+		Alpha:           p.alpha,
+		Beta:            p.betaP,
+		Min:             p.min,
+		Max:             p.max,
+		boundsEstimated: true,
+	}, nil
 }

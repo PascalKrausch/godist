@@ -5,8 +5,6 @@ import (
 	"io"
 )
 
-// SilvermanReport contains the result for testing whether a density has more
-// than the requested number of modes.
 type SilvermanReport struct {
 	Modes              int     `json:"modes"`
 	CriticalBandwidth  float64 `json:"critical_bandwidth"`
