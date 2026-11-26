@@ -64,7 +64,7 @@ func TestDipReportRendering(t *testing.T) {
 
 	// WriteSummary zeigt den Dip-Abschnitt ebenfalls.
 	buf.Reset()
-	WriteSummary(&buf, distribution.Normal{Mu: 0, Sigma: 1}, distribution.FitMetrics{AIC: 10, BIC: 11}, "", stats.Summary{N: 10}, 0, nil, dip)
+	WriteSummary(&buf, distribution.Normal{Mu: 0, Sigma: 1}, distribution.FitMetrics{AIC: 10, BIC: 11}, "", stats.Summary{N: 10}, 0, nil, dip, nil)
 	if !strings.Contains(buf.String(), "Dip test (Hartigan)") {
 		t.Errorf("Zusammenfassung enthält keinen Dip-Abschnitt:\n%s", buf.String())
 	}

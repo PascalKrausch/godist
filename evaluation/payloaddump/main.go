@@ -40,7 +40,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	payload := cli.BuildPlotSource(ds.Values, results)(*bins, *kde)
+	payload := cli.BuildPlotSource(ds.Values, results, nil)(*bins, *kde)
 	if err := json.NewEncoder(os.Stdout).Encode(payload); err != nil {
 		fmt.Fprintf(os.Stderr, "Fehler: %v\n", err)
 		os.Exit(1)

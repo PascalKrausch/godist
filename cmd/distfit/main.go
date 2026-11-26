@@ -67,6 +67,10 @@ func runFitCommand(name string, args []string, allowPositional bool, stdout, std
 	dip := fs.Bool("dip", false, "Hartigan-Dip-Test auf die Stichprobe (Unimodalität; p-Wert per Monte-Carlo)")
 	dipSimulations := fs.Int("dip-simulations", 2000, "Monte-Carlo-Simulationen für -dip (2000 bis 10000 empfohlen)")
 	dipSeed := fs.Uint64("dip-seed", 1, "Seed für reproduzierbare -dip-Läufe")
+	silverman := fs.Bool("silverman", false, "Silverman-Test auf mehr als k Modi (kritische KDE-Bandbreite; p-Wert per Bootstrap)")
+	silvermanModes := fs.Int("silverman-modes", 1, "Modenzahl k unter der Nullhypothese von -silverman")
+	silvermanSimulations := fs.Int("silverman-simulations", 1000, "Smoothed-Bootstrap-Wiederholungen für -silverman (1000 empfohlen)")
+	silvermanSeed := fs.Uint64("silverman-seed", 1, "Seed für reproduzierbare -silverman-Läufe")
 
 	positional, err := parseArgs(fs, args)
 	if err != nil {
@@ -89,6 +93,9 @@ func runFitCommand(name string, args []string, allowPositional bool, stdout, std
 	}
 	if err == nil {
 		err = validateDipFlags(fs, *dip, *dipSimulations, *format)
+	}
+	if err == nil {
+		err = validateSilvermanFlags(fs, *silverman, *silvermanModes, *silvermanSimulations)
 	}
 	if err != nil {
 		fmt.Fprintf(stderr, "Fehler: %v\n\n", err)
@@ -144,10 +151,29 @@ func runFitCommand(name string, args []string, allowPositional bool, stdout, std
 			Seed:        *dipSeed,
 		}
 	}
-	if *allModels {
-		return runAll(stdout, stderr, ds, filePath, *format, fitters, bootCfg, *bootstrapModel, dipReport)
+	var silvermanReport *cli.SilvermanReport
+	var silvermanResult *distribution.SilvermanTestResult
+	if *silverman {
+		res, testErr := distribution.SilvermanTest(ds.Values, *silvermanModes, *silvermanSimulations, *silvermanSeed)
+		if testErr != nil {
+			fmt.Fprintf(stderr, "Fehler: Silverman-Test fehlgeschlagen: %v\n", testErr)
+			return exitFailure
+		}
+		silvermanResult = &res
+		silvermanReport = &cli.SilvermanReport{
+			Modes:              res.Modes,
+			CriticalBandwidth:  res.CriticalBandwidth,
+			ReferenceBandwidth: res.ReferenceBandwidth,
+			BandwidthRatio:     res.BandwidthRatio,
+			PValue:             res.PValue,
+			Simulations:        res.Simulations,
+			Seed:               res.Seed,
+		}
 	}
-	return runBest(stdout, stderr, ds, fitters, bootCfg, dipReport)
+	if *allModels {
+		return runAll(stdout, stderr, ds, filePath, *format, fitters, bootCfg, *bootstrapModel, dipReport, silvermanReport, silvermanResult)
+	}
+	return runBest(stdout, stderr, ds, fitters, bootCfg, dipReport, silvermanReport)
 }
 
 // selectFitters übersetzt die Auswahl-Flags in Kandidaten. -distribution ist ein Sonderfall
@@ -335,6 +361,29 @@ func validateDipFlags(fs *flag.FlagSet, enabled bool, simulations int, format st
 	return nil
 }
 
+func validateSilvermanFlags(fs *flag.FlagSet, enabled bool, modes, simulations int) error {
+	if enabled {
+		if modes < 1 {
+			return fmt.Errorf("-silverman-modes muss >= 1 sein, erhalten: %d", modes)
+		}
+		if simulations < 1 {
+			return fmt.Errorf("-silverman-simulations muss >= 1 sein, erhalten: %d", simulations)
+		}
+		return nil
+	}
+	var stray []string
+	fs.Visit(func(f *flag.Flag) {
+		switch f.Name {
+		case "silverman-modes", "silverman-simulations", "silverman-seed":
+			stray = append(stray, "-"+f.Name)
+		}
+	})
+	if len(stray) > 0 {
+		return fmt.Errorf("%s erfordert -silverman", strings.Join(stray, ", "))
+	}
+	return nil
+}
+
 // applyBootstrap führt die Bootstrap-Wiederholungen für die gewählten Modelle aus
 // und hängt das Ergebnis an FitResult.Bootstrap. scope "best" beschränkt auf das
 // Modell mit dem kleinsten AIC, "all" auf alle erfolgreichen Fits.
@@ -378,7 +427,7 @@ func applyBootstrap(results []distribution.FitResult, fitters []distribution.Fit
 }
 
 // runAll vergleicht alle Verteilungen und gibt den Bericht aus.
-func runAll(stdout, stderr io.Writer, ds cli.Dataset, filePath, format string, fitters []distribution.Fitter, bootCfg distribution.BootstrapConfig, bootScope string, dip *cli.DipReport) int {
+func runAll(stdout, stderr io.Writer, ds cli.Dataset, filePath, format string, fitters []distribution.Fitter, bootCfg distribution.BootstrapConfig, bootScope string, dip *cli.DipReport, silverman *cli.SilvermanReport, silvermanResult *distribution.SilvermanTestResult) int {
 	start := time.Now()
 	results, failures, err := distribution.SelectAllModelsFromFitters(ds.Values, fitters)
 	if err != nil {
@@ -389,11 +438,12 @@ func runAll(stdout, stderr io.Writer, ds cli.Dataset, filePath, format string, f
 	totalDuration := time.Since(start)
 
 	if format == "plot" {
-		return runPlot(stderr, ds.Values, results, totalDuration)
+		return runPlot(stderr, ds.Values, results, totalDuration, silvermanResult)
 	}
 
 	report := cli.BuildFitReport(results, failures, filePath, ds.Column, stats.Describe(ds.Values), len(ds.Discarded))
 	report.Dip = dip
+	report.Silverman = silverman
 	report.TotalDurationMs = float64(totalDuration) / float64(time.Millisecond)
 
 	if format == "json" {
@@ -414,13 +464,13 @@ func runAll(stdout, stderr io.Writer, ds cli.Dataset, filePath, format string, f
 }
 
 // runPlot startet das interaktive Dashboard, öffnet den Browser und blockiert bis Strg+C.
-func runPlot(stderr io.Writer, values []float64, results []distribution.FitResult, fitDuration time.Duration) int {
+func runPlot(stderr io.Writer, values []float64, results []distribution.FitResult, fitDuration time.Duration, silverman *distribution.SilvermanTestResult) int {
 	if len(results) == 0 {
 		fmt.Fprintln(stderr, "Fehler: Kein Modell konnte angepasst werden.")
 		return exitFailure
 	}
 
-	source := cli.BuildPlotSource(values, results)
+	source := cli.BuildPlotSource(values, results, silverman)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 
@@ -438,7 +488,7 @@ func runPlot(stderr io.Writer, values []float64, results []distribution.FitResul
 }
 
 // runBest gibt nur das beste Modell aus.
-func runBest(stdout, stderr io.Writer, ds cli.Dataset, fitters []distribution.Fitter, bootCfg distribution.BootstrapConfig, dip *cli.DipReport) int {
+func runBest(stdout, stderr io.Writer, ds cli.Dataset, fitters []distribution.Fitter, bootCfg distribution.BootstrapConfig, dip *cli.DipReport, silverman *cli.SilvermanReport) int {
 	results, _, err := distribution.SelectAllModelsFromFitters(ds.Values, fitters)
 	if err != nil {
 		fmt.Fprintf(stderr, "Fehler: Fitting fehlgeschlagen: %v\n", err)
@@ -456,7 +506,7 @@ func runBest(stdout, stderr io.Writer, ds cli.Dataset, fitters []distribution.Fi
 	}
 	applyBootstrap(results, fitters, ds.Values, bootCfg, "best", stderr)
 	result := results[best]
-	cli.WriteSummary(stdout, result.Dist, result.Metrics, ds.Column, stats.Describe(ds.Values), len(ds.Discarded), result.Bootstrap, dip)
+	cli.WriteSummary(stdout, result.Dist, result.Metrics, ds.Column, stats.Describe(ds.Values), len(ds.Discarded), result.Bootstrap, dip, silverman)
 	return exitOK
 }
 

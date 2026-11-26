@@ -52,7 +52,7 @@ type Fitter interface {
 
 ## Plot-Schicht
 
-- `internal/plot` berechnet die Diagrammdaten (`BuildPayloadWithBins`): Histogramm, KDE (Gauss-Kernel mit Silverman-Bandbreite, skaliert über einen Faktor), ECDF, PDF- und CDF-Kurven der Modelle auf einem gemeinsamen Raster sowie Q-Q-Punkte. Die Darstellung findet dort nicht statt. Die deskriptiven Kennzahlen kommen aus `internal/stats` (`Describe`) und stehen im Feld `descriptive`.
+- `internal/plot` berechnet die Diagrammdaten (`BuildPayloadWithBins`): Histogramm, KDE (Gauss-Kernel mit Silverman-Bandbreite, skaliert über einen Faktor), optional die kritische KDE aus dem Silverman-Modentest, ECDF, PDF- und CDF-Kurven der Modelle auf einem gemeinsamen Raster sowie Q-Q-Punkte. Die Bandbreitenreferenz `distribution.SilvermanBandwidth` wird von KDE und Modentest gemeinsam genutzt; die Darstellung findet dort nicht statt. Die deskriptiven Kennzahlen kommen aus `internal/stats` (`Describe`) und stehen im Feld `descriptive`.
 - `internal/plotserver` bettet das Frontend (`internal/plotserver/web/`, uPlot) per `go:embed` ein und liefert es zusammen mit der JSON-API aus. Anfragen mit fremdem Host-Header werden abgelehnt.
 - Die Datenquelle wird pro Anfrage aufgerufen (`plotserver.Source`), damit die Klassenanzahl im Browser geändert werden kann, ohne den Server neu zu starten.
 

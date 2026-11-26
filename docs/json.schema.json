@@ -57,6 +57,20 @@
       },
       "description": "Hartigan-Dip-Test auf die Eingabestichprobe (Unimodalität). Nur vorhanden bei -dip."
     },
+    "silverman_test": {
+      "type": "object",
+      "required": ["modes", "critical_bandwidth", "reference_bandwidth", "bandwidth_ratio", "p_value", "simulations", "seed"],
+      "properties": {
+        "modes": { "type": "integer", "minimum": 1 },
+        "critical_bandwidth": { "type": "number", "minimum": 0 },
+        "reference_bandwidth": { "type": "number", "minimum": 0 },
+        "bandwidth_ratio": { "type": "number", "minimum": 0 },
+        "p_value": { "type": "number", "minimum": 0, "maximum": 1 },
+        "simulations": { "type": "integer", "minimum": 1 },
+        "seed": { "type": "integer", "minimum": 0 }
+      },
+      "description": "Silvermans kritische-Bandbreiten-Test der Nullhypothese höchstens k Modi. Nur vorhanden bei -silverman."
+    },
     "descriptive": {
       "type": "object",
       "required": ["n", "mean", "median", "variance", "std_dev", "min", "q1", "q3", "max", "skewness", "kurtosis", "ties", "tie_rate", "max_tie_run"],

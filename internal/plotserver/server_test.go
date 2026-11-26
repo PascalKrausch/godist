@@ -18,7 +18,7 @@ func newTestHandler(t *testing.T) http.Handler {
 	t.Helper()
 	models := []plot.Model{{Name: "Normal", Dist: distribution.Normal{Mu: 3, Sigma: 1}}}
 	source := func(bins int, kdeFactor float64) plot.Payload {
-		return plot.BuildPayloadWithBins([]float64{1, 2, 3, 4, 5}, models, bins, kdeFactor)
+		return plot.BuildPayloadWithBins([]float64{1, 2, 3, 4, 5}, models, bins, kdeFactor, nil)
 	}
 	handler, err := Handler(source, testAddr)
 	if err != nil {

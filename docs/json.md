@@ -18,6 +18,7 @@ Der verbindliche Vertrag ist [`json.schema.json`](json.schema.json) (JSON Schema
 - `failures` ist immer vorhanden (ggf. leeres Array).
 - `models[].bootstrap` ist optional und nur vorhanden, wenn `-bootstrap > 0` für dieses Modell lief (siehe [CLI.md, Bootstrap](CLI.md#bootstrap-konfidenzintervalle)). Es enthält `method` (`nonparametric` oder `parametric`), `requested`/`replicates`/`failed` (Anzahl Wiederholungen und Ausfälle), `level` (Konfidenzniveau), `seed` (für `-bootstrap-seed`), `duration_ms`, `params` (Array aus `name`, `mean`, `lo`, `hi`) und `metrics` (`aic`, `bic`, `ks`, `rmse` als `mean`/`lo`/`hi`).
 - `dip_test` ist optional und nur vorhanden, wenn `-dip` gesetzt war. Es enthält `dip` (Dip-Statistik, 0 bis 0.25), `p_value` (Monte-Carlo-p-Wert gegen Unimodalität), `simulations` und `seed` (für `-dip-seed`). Siehe [CLI.md, Dip-Test](CLI.md#dip-test).
+- `silverman_test` ist optional und nur vorhanden, wenn `-silverman` gesetzt war. Es enthält das getestete `modes` (k), `critical_bandwidth`, die Silverman-`reference_bandwidth`, deren `bandwidth_ratio`, den Bootstrap-`p_value`, `simulations` und `seed`. Die Nullhypothese lautet „höchstens k Modi“. Siehe [CLI.md, Silverman-Test](CLI.md#silverman-test-kritische-bandbreite).
 - Nicht berechenbare deskriptive Kennzahlen sind `null`.
 - Ist ein Wert nicht darstellbar (NaN/Inf), gibt es keine Teilausgabe: stdout bleibt leer, Exit-Code 1.
 

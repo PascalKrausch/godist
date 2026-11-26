@@ -58,6 +58,10 @@ Verworfene Eingaben (leere Zellen, Text, `NaN`, `±Inf`, `null`) werden nicht st
 | `-dip` | – | Hartigan-Dip-Test auf die bereinigte Stichprobe (Unimodalität). Siehe unten. |
 | `-dip-simulations` | Ganzzahl ≥ 1 | Monte-Carlo-Simulationen für den p-Wert. Standard: `2000` (2000 bis 10000 empfohlen). Erfordert `-dip`. |
 | `-dip-seed` | Ganzzahl ≥ 0 | Fester Seed für reproduzierbare Läufe. Standard: `1`. Erfordert `-dip`. |
+| `-silverman` | – | Silvermans Test der Nullhypothese „höchstens k Modi“ (Smoothed Bootstrap). |
+| `-silverman-modes` | Ganzzahl ≥ 1 | Getestetes k in „höchstens k Modi“. Standard: `1`. Erfordert `-silverman`. |
+| `-silverman-simulations` | Ganzzahl ≥ 1 | Smoothed-Bootstrap-Wiederholungen. Standard: `1000`. Erfordert `-silverman`. |
+| `-silverman-seed` | Ganzzahl ≥ 0 | Fester Seed für reproduzierbare Läufe. Standard: `1`. Erfordert `-silverman`. |
 
 Im Hilfetext (`distfit -h`) stehen dieselben Flags mit Kurzbeschreibung.
 
@@ -191,6 +195,17 @@ Im Textbericht erscheint ein Abschnitt „Dip test (Hartigan)“ (Dip und p-Wert
 Der p-Wert ist Monte-Carlo: mit `-dip-seed` ist er pro Datenstand reproduzierbar, seine Auflösung liegt bei `1/(simulationen+1)` (Standard `2000` → kleinster unterscheidbarer Wert ≈ 0,0005). Für sehr große Stichproben (`n` im sechsstelligen Bereich) kann `-dip-simulations` reduziert werden; die Statistik selbst ist auch für kleine `n` (≥ 5) definiert, verliert aber an Trennschärfe.
 
 **Nullwerte:** `-dip` läuft immer auf den rohen Werten einschließlich Nullen, unabhängig von `-zero-inflated`. Eine Punktmasse bei 0 wirkt wie eine eigene Mode und kann die Unimodalität-Hypothese allein schon verwerfen — bei Zero-inflated-Daten ist ein kleiner p-Wert daher erwartbar und kein Widerspruch zum ZI-Modell. Die Aussage „die positiven Werte sind unimodal" liefert der Test so nicht; dafür ist die Stichprobe vorher auf `> 0` zu filtern.
+
+## Silverman-Test (kritische Bandbreite)
+
+Mit `-silverman` wird Silvermans Test der Nullhypothese „die Dichte hat höchstens k Modi“ ausgeführt; standardmäßig ist `k=1`. Die kritische Bandbreite ist die kleinste Gauß-KDE-Bandbreite, bei der höchstens k lokale Maxima verbleiben. Der p-Wert wird mit Silvermans reskalierendem Smoothed Bootstrap geschätzt; ein kleiner p-Wert spricht gegen die Nullhypothese. `-silverman-modes` setzt k, `-silverman-simulations` die Zahl der Bootstrap-Wiederholungen (Standard: 1000) und `-silverman-seed` den reproduzierbaren Seed.
+
+```bash
+distfit fit werte.txt -silverman
+distfit fit werte.txt -silverman -silverman-modes=2 -silverman-simulations=1000 -silverman-seed=42
+```
+
+Text- und JSON-Berichte enthalten kritische und Silverman-Referenzbandbreite, ihr Verhältnis sowie p-Wert, Simulationszahl und Seed. Im Dashboard zeigt die zusätzliche KDE-Kurve die kritische Bandbreite. Die Berechnung verwendet die endlichen Rohwerte einschließlich Nullen. Der klassische Silverman-Test wird ohne Hall–York-Korrektur ausgeführt und kann insbesondere für k=1 konservativ sein; p-Werte sind Monte-Carlo-Schätzungen und die Modenzahl ist keine Clusterzuordnung.
 
 ## Ausgabeformate
 

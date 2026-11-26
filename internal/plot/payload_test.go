@@ -168,7 +168,7 @@ func TestBuildPayloadKDEIntegratesAndFollowsFactor(t *testing.T) {
 		sorted[i] = float64(i) * 10 / float64(n-1)
 	}
 
-	payload := BuildPayloadWithBins(sorted, nil, 0, 1)
+	payload := BuildPayloadWithBins(sorted, nil, 0, 1, nil)
 	if payload.KDE.Bandwidth == nil || payload.KDE.Silverman == nil {
 		t.Fatalf("KDE bandwidth/silverman = %v/%v, want positive values", payload.KDE.Bandwidth, payload.KDE.Silverman)
 	}
@@ -196,7 +196,7 @@ func TestBuildPayloadKDEIntegratesAndFollowsFactor(t *testing.T) {
 	}
 
 	// Ein größerer Faktor muss eine glattere (höhere, breitere) Kurve ergeben.
-	smooth := BuildPayloadWithBins(sorted, nil, 0, 3)
+	smooth := BuildPayloadWithBins(sorted, nil, 0, 3, nil)
 	if smooth.KDE.Bandwidth == nil || smooth.KDE.Silverman == nil {
 		t.Fatalf("factor 3 KDE bandwidth/silverman = %v/%v, want positive values", smooth.KDE.Bandwidth, smooth.KDE.Silverman)
 	}
@@ -212,6 +212,26 @@ func TestBuildPayloadKDEEmptyForConstantData(t *testing.T) {
 	}
 	if _, err := json.Marshal(payload); err != nil {
 		t.Errorf("payload does not marshal to JSON: %v", err)
+	}
+}
+
+func TestBuildPayloadIncludesSilvermanCriticalDensity(t *testing.T) {
+	data := []float64{-3, -2.9, -3.1, 3, 2.9, 3.1}
+	result := &distribution.SilvermanTestResult{
+		Modes:              1,
+		CriticalBandwidth:  1.5,
+		ReferenceBandwidth: 0.8,
+		BandwidthRatio:     1.875,
+		PValue:             0.04,
+		Simulations:        99,
+		Seed:               7,
+	}
+	payload := BuildPayloadWithBins(data, nil, 0, 1, result)
+	if payload.SilvermanTest == nil || payload.SilvermanTest.PValue != result.PValue {
+		t.Fatalf("Silverman test = %+v, want %+v", payload.SilvermanTest, result)
+	}
+	if len(payload.KDE.CriticalDensity) != len(payload.Grid) {
+		t.Errorf("critical density length = %d, grid length = %d", len(payload.KDE.CriticalDensity), len(payload.Grid))
 	}
 }
 

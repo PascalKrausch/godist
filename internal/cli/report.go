@@ -47,6 +47,8 @@ type FitReport struct {
 	Failures         []distribution.FitFailure `json:"failures"`
 	// Dip enthält das Ergebnis des Hartigan-Dip-Tests; nil, wenn -dip nicht gesetzt war.
 	Dip *DipReport `json:"dip_test,omitempty"`
+	// Silverman enthält den Test auf mehr als k Modi; nil, wenn -silverman nicht gesetzt war.
+	Silverman *SilvermanReport `json:"silverman_test,omitempty"`
 	// TotalDurationMs ist die Walltime aller Fits zusammen in Millisekunden; 0, wenn nicht gemessen.
 	TotalDurationMs float64 `json:"total_duration_ms,omitempty"`
 }
@@ -101,6 +103,7 @@ func WriteTextReport(w io.Writer, report FitReport) error {
 		fmt.Fprintln(w)
 		writeDescriptive(w, report.Descriptive)
 		writeDipSection(w, report.Dip)
+		writeSilvermanSection(w, report.Silverman)
 		return nil
 	}
 	fmt.Fprintln(w)
@@ -131,6 +134,7 @@ func WriteTextReport(w io.Writer, report FitReport) error {
 
 	writeDescriptive(w, report.Descriptive)
 	writeDipSection(w, report.Dip)
+	writeSilvermanSection(w, report.Silverman)
 
 	best := report.Models[0]
 
@@ -246,8 +250,8 @@ func percentLabel(level float64) string {
 }
 
 // WriteSummary schreibt das Ergebnis des Einzelmodells (bestes Modell) als Zusammenfassung.
-// bootstrap und dip dürfen nil sein, wenn die jeweiligen Tests nicht liefen.
-func WriteSummary(w io.Writer, dist distribution.ContinuousDistribution, metrics distribution.FitMetrics, column string, descriptive stats.Summary, discarded int, bootstrap *distribution.BootstrapResult, dip *DipReport) {
+// bootstrap, dip und silverman dürfen nil sein, wenn die jeweiligen Tests nicht liefen.
+func WriteSummary(w io.Writer, dist distribution.ContinuousDistribution, metrics distribution.FitMetrics, column string, descriptive stats.Summary, discarded int, bootstrap *distribution.BootstrapResult, dip *DipReport, silverman *SilvermanReport) {
 	fmt.Fprintln(w, "=== GODIST FITTER ERGEBNIS ===")
 	if column != "" {
 		fmt.Fprintf(w, "Spalte:         %s\n", column)
@@ -269,6 +273,7 @@ func WriteSummary(w io.Writer, dist distribution.ContinuousDistribution, metrics
 	fmt.Fprintln(w)
 	writeDescriptive(w, descriptive)
 	writeDipSection(w, dip)
+	writeSilvermanSection(w, silverman)
 }
 
 // writeBootstrapBlock gibt die Bootstrap-Konfidenzintervalle eines einzelnen Modells aus.

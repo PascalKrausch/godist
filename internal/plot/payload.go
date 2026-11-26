@@ -62,6 +62,8 @@ type Histogram struct {
 type KDE struct {
 	// Density ist parallel zu Payload.Grid.
 	Density []float64 `json:"density"`
+	// CriticalDensity ist die KDE bei der Silverman-kritischen Bandbreite, falls getestet.
+	CriticalDensity []float64 `json:"critical_density,omitempty"`
 	// Bandwidth ist die verwendete Bandbreite h.
 	Bandwidth *float64 `json:"bandwidth"`
 	// Silverman ist die Silverman-Referenzbandbreite; Bandwidth = Faktor × Silverman.
@@ -83,13 +85,14 @@ type ModelPlot struct {
 // Payload ist alle Daten, die das Dashboard benötigt.
 // Grid ist das gemeinsame X-Gitter; Histogram.GridDensity, ECDF und die Modellkurven haben dieselbe Länge.
 type Payload struct {
-	SampleSize  int           `json:"sample_size"`
-	Descriptive stats.Summary `json:"descriptive"`
-	Grid        []float64     `json:"grid"`
-	Histogram   Histogram     `json:"histogram"`
-	KDE         KDE           `json:"kde"`
-	ECDF        []float64     `json:"ecdf"`
-	Models      []ModelPlot   `json:"models"`
+	SampleSize    int                               `json:"sample_size"`
+	Descriptive   stats.Summary                     `json:"descriptive"`
+	Grid          []float64                         `json:"grid"`
+	Histogram     Histogram                         `json:"histogram"`
+	KDE           KDE                               `json:"kde"`
+	SilvermanTest *distribution.SilvermanTestResult `json:"silverman_test,omitempty"`
+	ECDF          []float64                         `json:"ecdf"`
+	Models        []ModelPlot                       `json:"models"`
 }
 
 // MaxBins ist die größte zulässige Klassenanzahl des Histogramms.
@@ -98,13 +101,14 @@ const MaxBins = maxBins
 // BuildPayload erstellt alle Diagrammdaten mit automatischer Klassenanzahl und Silverman-Bandbreite.
 // Die Werte müssen bereits bereinigt sein (endlich, im Träger der Modelle).
 func BuildPayload(values []float64, models []Model) Payload {
-	return BuildPayloadWithBins(values, models, 0, 0)
+	return BuildPayloadWithBins(values, models, 0, 0, nil)
 }
 
 // BuildPayloadWithBins wie BuildPayload, mit fester Klassenanzahl und KDE-Glättungsfaktor.
 // bins <= 0 wählt die Anzahl automatisch, größere Werte als MaxBins werden begrenzt.
 // kdeFactor <= 0 oder nicht endlich bedeutet Silverman-Standard (Faktor 1), sonst h = kdeFactor × Silverman.
-func BuildPayloadWithBins(values []float64, models []Model, bins int, kdeFactor float64) Payload {
+// silverman ist optional; bei nicht-nil werden Testergebnis und kritische KDE aufgenommen.
+func BuildPayloadWithBins(values []float64, models []Model, bins int, kdeFactor float64, silverman *distribution.SilvermanTestResult) Payload {
 	sorted := append([]float64(nil), values...)
 	sort.Float64s(sorted)
 
@@ -124,6 +128,12 @@ func BuildPayloadWithBins(values []float64, models []Model, bins int, kdeFactor 
 	payload.ECDF = ecdfOnGrid(sorted, payload.Grid)
 	payload.Histogram.GridDensity = histogramOnGrid(payload.Histogram, payload.Grid)
 	payload.KDE = newKDE(sorted, payload.Grid, payload.Descriptive.StdDev, kdeFactor)
+	if silverman != nil {
+		payload.SilvermanTest = silverman
+		if silverman.CriticalBandwidth > 0 {
+			payload.KDE.CriticalDensity = kdeOnGrid(sorted, payload.Grid, silverman.CriticalBandwidth)
+		}
+	}
 
 	for _, m := range models {
 		payload.Models = append(payload.Models, ModelPlot{
@@ -310,7 +320,7 @@ func newMetrics(m distribution.FitMetrics) Metrics {
 // Die Bandbreite ist faktor × Silverman-Bandbreite; faktor <= 0 oder nicht endlich bedeutet Faktor 1.
 // Ohne positive Bandbreite (z. B. konstante Daten) ist das Ergebnis leer.
 func newKDE(sorted, grid []float64, stdDev, factor float64) KDE {
-	silverman := silvermanBandwidth(sorted, stdDev)
+	silverman := distribution.SilvermanBandwidth(sorted, stdDev)
 	if silverman <= 0 {
 		return KDE{}
 	}
@@ -327,22 +337,6 @@ func newKDE(sorted, grid []float64, stdDev, factor float64) KDE {
 		Bandwidth: &bandwidth,
 		Silverman: &silverman,
 	}
-}
-
-// silvermanBandwidth berechnet die Silverman-Regel
-// h = 0,9 · min(σ, IQR/1,349) · n^(−1/5). Gibt 0 zurück, wenn h nicht positiv ist.
-func silvermanBandwidth(sorted []float64, stdDev float64) float64 {
-	n := len(sorted)
-	if n < 2 || stdDev <= 0 || math.IsNaN(stdDev) || math.IsInf(stdDev, 0) {
-		return 0
-	}
-	sigma := stdDev
-	if iqr := quantileSorted(sorted, 0.75) - quantileSorted(sorted, 0.25); iqr > 0 {
-		if s := iqr / 1.349; s < sigma {
-			sigma = s
-		}
-	}
-	return 0.9 * sigma * math.Pow(float64(n), -0.2)
 }
 
 // kdeOnGrid wertet die Gauss-Kernel-Dichteschätzung auf dem Raster aus.

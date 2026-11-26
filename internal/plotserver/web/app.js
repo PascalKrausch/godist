@@ -100,6 +100,7 @@ function makeChart(element, x, curves, yLabel) {
 }
 
 function pdfCurves(payload) {
+  const critical = payload.kde.critical_density;
   return [
     {
       name: "Histogramm",
@@ -115,6 +116,12 @@ function pdfCurves(payload) {
       color: "#7f7f7f",
       dash: [6, 4],
     },
+    ...(critical ? [{
+      name: "KDE (kritische Bandbreite)",
+      y: critical,
+      color: "#d62728",
+      dash: [3, 3],
+    }] : []),
     ...payload.models.map(model => ({ name: model.name, y: model.pdf })),
   ];
 }
@@ -315,6 +322,20 @@ function renderKDEControls(payload, kde) {
     (kde ? "" : " (Silverman)");
 }
 
+function renderSilverman(payload) {
+  const target = document.querySelector("#silverman-info");
+  const result = payload.silverman_test;
+  if (!result) {
+    target.textContent = "";
+    return;
+  }
+  target.textContent =
+    `Silverman-Test (H₀: höchstens ${result.modes} Modi): ` +
+    `hₖ = ${formatNumber(result.critical_bandwidth)}, ` +
+    `${formatNumber(result.bandwidth_ratio)} × Referenz, ` +
+    `p = ${formatNumber(result.p_value)} (${result.simulations} Bootstrap-Simulationen).`;
+}
+
 let latestRequest = 0;
 
 async function update(bins, kde) {
@@ -341,6 +362,7 @@ async function update(bins, kde) {
   renderQQ(payload);
   renderBinsControls(payload, bins);
   renderKDEControls(payload, kde);
+  renderSilverman(payload);
 }
 
 function reportError(error) {
