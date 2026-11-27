@@ -197,21 +197,38 @@ func (f GeneralizedGammaFitter) Fit(data []float64) (ContinuousDistribution, err
 	for _, x := range cleaned {
 		sum += x
 	}
+	var alpha0Gamma float64
+	haveAlpha0 := false
 	if s := math.Log(sum/profile.n) - meanLog; s > 0 && IsFinite(s) {
 		alpha := (1.0 + math.Sqrt(1.0+4.0*s/3.0)) / (4.0 * s)
 		alpha = refineGammaAlpha(alpha, s)
 		beta := sum / profile.n / alpha
 		if alpha > 0 && IsFinite(alpha) && beta > 0 && IsFinite(beta) {
-			alpha0 := math.Log(alpha)
-			tryStart(1, alpha0, 0)
-			tryStart(-1, alpha0, 0)
+			alpha0Gamma = math.Log(alpha)
+			haveAlpha0 = true
+			tryStart(1, alpha0Gamma, 0)
 		}
 	}
 	if shape, ok := solveWeibullShape(profile.z); ok && shape > 0 && IsFinite(shape) {
 		tryStart(1, 0, math.Log(shape))
 	}
+	// Für d < 0 ist die profillierte Likelihood multimodal: ein einzelner
+	// Start (z. B. der Gamma-Start mit großem α) kann in ein lokales
+	// Optimum laufen und das globale Maximum mit stark negativem d
+	// verpassen. Daher wird ein kleines deterministisches Startgitter
+	// über (α, γ) probiert; tryStart behält das beste φ.
+	alphaStarts := []float64{0}
+	if haveAlpha0 {
+		alphaStarts = append([]float64{alpha0Gamma}, alphaStarts...)
+	}
+	for _, a0 := range alphaStarts {
+		for _, g0 := range []float64{0, math.Log(5), math.Log(30)} {
+			tryStart(-1, a0, g0)
+		}
+	}
 	if !fitted {
 		tryStart(1, 0, 0)
+		tryStart(-1, 0, 0)
 	}
 	if !fitted {
 		return nil, fmt.Errorf("GeneralizedGamma-MLE-Optimierung fehlgeschlagen: %w", ErrFitFailed)
