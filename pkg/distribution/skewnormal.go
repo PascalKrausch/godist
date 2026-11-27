@@ -211,9 +211,9 @@ func skewNormalLogLikGrad(data []float64, xi, omega, alpha float64) (ll, gXi, gT
 type skewNormalProfile struct {
 	data []float64
 
-	cacheXi, cacheTheta, cacheAlpha       float64
+	cacheXi, cacheTheta, cacheAlpha             float64
 	cacheLL, cacheGXi, cacheGTheta, cacheGAlpha float64
-	cacheOK, cacheValid                    bool
+	cacheOK, cacheValid                         bool
 }
 
 func (p *skewNormalProfile) eval(xi, theta, alpha float64) (ll, gXi, gTheta, gAlpha float64, ok bool) {

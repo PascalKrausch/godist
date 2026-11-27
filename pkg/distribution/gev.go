@@ -152,8 +152,8 @@ const (
 	// gevXiGradV ist die |v| = |ξz|-Schwelle, unterhalb derer ds/dξ per Potenzreihe
 	// statt als Differenz (z/u − s)/ξ berechnet wird; dort wäre die Differenz
 	// numerisch instabil (hebbares 0/0-Verhalten bei ξ → 0).
-	gevXiGradV   = 0.05
-	gevMaxIter   = 500
+	gevXiGradV = 0.05
+	gevMaxIter = 500
 )
 
 // gevLogLik berechnet die Log-Likelihood eines GEV-Modells. ok ist false, wenn

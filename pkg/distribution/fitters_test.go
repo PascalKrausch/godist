@@ -8,6 +8,63 @@ import (
 	"gonum.org/v1/gonum/mathext"
 )
 
+func TestFitBetaMLENewtonIndependentOfStart(t *testing.T) {
+	const n = 200
+	dist := Beta{Alpha: 3, Beta: 5, Min: 0, Max: 1}
+	var s1, s2 float64
+	for i := 0; i < n; i++ {
+		y := dist.Quantile((float64(i) + 0.5) / n)
+		s1 += math.Log(y)
+		s2 += math.Log1p(-y)
+	}
+
+	refA, refB, err := fitBetaMLE(s1, s2, 2, 2, n)
+	if err != nil {
+		t.Fatalf("reference fit failed: %v", err)
+	}
+
+	for _, start := range [][2]float64{{0.05, 40}, {400, 0.2}} {
+		a, b, err := fitBetaMLE(s1, s2, start[0], start[1], n)
+		if err != nil {
+			t.Fatalf("fit from start %v failed: %v", start, err)
+		}
+		if math.Abs(a-refA) > 1e-6*refA || math.Abs(b-refB) > 1e-6*refB {
+			t.Errorf("start %v: got (%g, %g), want (%g, %g)", start, a, b, refA, refB)
+		}
+		ga, gb := betaNLLGrad(a, b, n, s1, s2)
+		if math.Max(math.Abs(ga), math.Abs(gb))/n > 1e-8 {
+			t.Errorf("start %v: gradient not zero at result: (%g, %g)", start, ga, gb)
+		}
+	}
+}
+
+func TestFitBetaAutoBoundsNewton(t *testing.T) {
+	const n = 500
+	dist := Beta{Alpha: 2, Beta: 5, Min: 1, Max: 3}
+	data := make([]float64, n)
+	for i := range data {
+		data[i] = dist.Quantile((float64(i) + 0.5) / n)
+	}
+	fit, err := fitBetaAutoBounds(data)
+	if err != nil {
+		t.Fatalf("fit failed: %v", err)
+	}
+	b := fit.(Beta)
+	if math.Abs(b.Alpha-2) > 0.2 || math.Abs(b.Beta-5) > 0.5 || math.Abs(b.Min-1) > 0.05 || math.Abs(b.Max-3) > 0.1 {
+		t.Errorf("got %+v, want approx %+v", b, dist)
+	}
+
+	// Optimum liegt auf dem Rand (α → 1, min → dataMin); muss ohne Fehler enden.
+	edge := make([]float64, n)
+	for i := range edge {
+		u := (float64(i) + 0.5) / n
+		edge[i] = 2 + 5*u*u
+	}
+	if _, err := fitBetaAutoBounds(edge); err != nil {
+		t.Errorf("boundary fit failed: %v", err)
+	}
+}
+
 func TestFittersFitValidData(t *testing.T) {
 	data := []float64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
 	withInvalidValues := []float64{1, 2, math.NaN(), 3, math.Inf(1), 4, -1, 5, 6, 7, 8, 9, 10}
