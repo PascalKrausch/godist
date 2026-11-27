@@ -5,6 +5,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -210,6 +211,7 @@ def fit_gengamma_mle(data):
 
 def fit_scipy(name, data):
     n = len(data)
+    degenerate = False
 
     if name == "Weibull":
         if np.any(data <= 0):
@@ -353,34 +355,36 @@ def fit_scipy(name, data):
         k = 1
 
     elif name == "Beta":
-        # Dieselbe automatische Randkonvention wie im Go-BetaFitter:
-        # 1 % der beobachteten Spannweite als Randzugabe.
-        lo = float(np.min(data))
-        hi = float(np.max(data))
-        margin = 0.01 * (hi - lo)
-        if margin == 0:
-            margin = 0.001
-        min_val = lo - margin
-        max_val = hi + margin
-        width = max_val - min_val
-
-        # Grenzen fixieren, nur alpha und beta optimieren.
-        a, b, _, _ = beta_dist.fit(
-            data, floc=min_val, fscale=width
-        )
-        loglik = np.sum(
-            beta_dist.logpdf(data, a, b, loc=min_val, scale=width)
-        )
-        cdf = lambda x: beta_dist.cdf(
-            x, a, b, loc=min_val, scale=width
-        )
+        # Go-Fitter: 4-Parameter-MLE mit per ML geschätzten Grenzen
+        # (Alpha, Beta > 1, min < dataMin, max > dataMax). Entspricht dem
+        # freien loc/scale-Fit hier; k = 4 wie boundsEstimated in Go.
+        # Läuft die Anpassung in den entarteten Grenzfall (Groß alpha/beta
+        # oder vastly übermäßige Trägerbreite), lehnt Go den Kandidaten ab
+        # (errBetaDegenerate); das wird hier analog markiert und der
+        # Vergleich übersprungen, statt einen nicht existierenden Go-Fit
+        # als Abweichung zu melden.
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            a, b, loc, scale = beta_dist.fit(data)
+        width = float(scale)
+        data_range = float(np.max(data) - np.min(data))
+        loglik = float(np.sum(
+            beta_dist.logpdf(data, a, b, loc=loc, scale=scale)
+        ))
+        if not np.isfinite(loglik):
+            raise ValueError("Beta-Fit lieferte nicht-endliche Likelihood")
+        cdf = lambda x: beta_dist.cdf(x, a, b, loc=loc, scale=scale)
         params = {
             "alpha": a,
             "beta": b,
-            "min": min_val,
-            "max": max_val,
+            "min": loc,
+            "max": loc + scale,
         }
-        k = 2
+        k = 4
+        degenerate = (
+            a > 1e4 or b > 1e4 or
+            (data_range > 0 and width > 1e3 * data_range)
+        )
 
     elif name == "BurrXII":
         # Go-Fitter: eigene profilierte MLE; SciPy-Referenz über burr12.fit.
@@ -389,7 +393,30 @@ def fit_scipy(name, data):
         if np.any(data <= 0):
             raise ValueError("BurrXII benötigt positive Daten")
         c, d, _, scale = burr12.fit(data, floc=0)
-        loglik = np.sum(burr12.logpdf(data, c, d, loc=0, scale=scale))
+
+        # burr12.fit kann auf flachen Gratstopps (großes c) vorzeitig
+        # enden; mit Nelder-Mead auf (ln c, ln d, ln scale) nachpolieren
+        # und das Ergebnis nur übernehmen, wenn es die Likelihood verbessert.
+        def burr_nll(theta):
+            lc, ld, ls = theta
+            with np.errstate(over="ignore", invalid="ignore", divide="ignore"):
+                try:
+                    ll = np.sum(burr12.logpdf(
+                        data, np.exp(lc), np.exp(ld), loc=0, scale=np.exp(ls)
+                    ))
+                except (ValueError, FloatingPointError):
+                    return np.inf
+            return -ll if np.isfinite(ll) else np.inf
+
+        start = np.array([np.log(c), np.log(d), np.log(scale)])
+        ll_start = -burr_nll(start)
+        res = minimize(
+            burr_nll, start, method="Nelder-Mead",
+            options={"maxiter": 20000, "xatol": 1e-10, "fatol": 1e-10},
+        )
+        if -res.fun > ll_start:
+            c, d, scale = np.exp(res.x[0]), np.exp(res.x[1]), np.exp(res.x[2])
+        loglik = float(np.sum(burr12.logpdf(data, c, d, loc=0, scale=scale)))
         cdf = lambda x: burr12.cdf(x, c, d, loc=0, scale=scale)
         params = {"scale": scale, "shape_c": c, "shape_k": d}
         k = 3
@@ -442,6 +469,7 @@ def fit_scipy(name, data):
         "rmse": cdf_rmse(data, cdf),
         "n": n,
         "k": k,
+        "degenerate": degenerate,
     }
 
 
@@ -504,7 +532,12 @@ def main():
         if gr is None:
             print(f"{name:<13} {'—':>10} {sr['aic']:>10.2f} "
                   f"{'—':>10} {'—':>9} {sr['ks']:>10.4f}")
-            mismatches.append(f"{name}: fehlt im Go-Ergebnis")
+            if sr.get("degenerate"):
+                # SciPy läuft ebenfalls in den entarteten Grenzfall:
+                # Go lehnt den Kandidaten hier zu Recht ab.
+                print(f"  ({name}: degenerierter Grenzfall, von Go abgelehnt)")
+            else:
+                mismatches.append(f"{name}: fehlt im Go-Ergebnis")
             continue
 
         aic_go = gr["aic"]

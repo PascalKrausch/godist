@@ -228,7 +228,10 @@ func (f BurrXIIFitter) Fit(data []float64) (ContinuousDistribution, error) {
 		return nil, fmt.Errorf("BurrXII-Formparameter an der Grenze: %w", ErrFitFailed)
 	}
 	_, dG, dB, sumS, ok := profile.evaluate(gamma, b)
-	if !ok || math.Max(math.Abs(dG), math.Abs(dB))/n > 1e-6 {
+	// Score-Toleranz 1e-4 pro Beobachtung (wie SkewNormal): auf flachen,
+	// stark gekrümmten Gratstopps (großes c) bleibt der Gradient bei
+	// ~1e-5 stehen, obwohl die Likelihood bereits am Optimum liegt.
+	if !ok || math.Max(math.Abs(dG), math.Abs(dB))/n > 1e-4 {
 		return nil, fmt.Errorf("BurrXII-MLE nicht konvergiert: %w", ErrFitFailed)
 	}
 
